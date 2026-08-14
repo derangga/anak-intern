@@ -1,0 +1,680 @@
+---
+name: effect-best-practices
+description: Enforces Effect-TS patterns for services, errors, layers, and atoms. Use when writing code with Effect.Service, Schema.TaggedError, Layer composition, or effect-atom React components.
+version: 1.0.0
+---
+
+# Effect-TS Best Practices
+
+This skill enforces opinionated, consistent patterns for Effect-TS codebases. These patterns optimize for type safety, testability, observability, and maintainability.
+
+## Effect Language Server (Required)
+
+**The Effect Language Server is essential for Effect development.** It catches errors at edit-time that TypeScript alone cannot detect, provides Effect-specific refactors, and improves developer productivity.
+
+### Setup
+
+1. Install:
+
+```bash
+npm install @effect/language-service --save-dev
+```
+
+2. Add to `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "plugins": [{ "name": "@effect/language-service" }]
+  }
+}
+```
+
+3. Configure your editor to use workspace TypeScript:
+   - **VSCode**: F1 → "TypeScript: Select TypeScript Version" → "Use Workspace Version"
+   - **JetBrains**: Settings → Languages & Frameworks → TypeScript → Use workspace version
+
+### Features
+
+- **Diagnostics**: Detects 30+ Effect-specific issues (floating Effects, missing requirements, incorrect yield patterns)
+- **Quick Info**: Hover to see Effect type parameters (Success, Error, Requirements)
+- **Completions**: Auto-complete `Self`, Duration strings, Schema brands
+- **Refactors**: Convert async → Effect.gen, auto-compose Layers, transform to Schema
+
+### Build-Time Diagnostics
+
+For CI enforcement:
+
+```bash
+npx effect-language-service patch
+```
+
+See `references/language-server.md` for configuration options and CLI tools.
+
+## Quick Reference: Critical Rules
+
+| Category            | DO                                                      | DON'T                                            |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------ |
+| Services            | `Effect.Service` with `accessors: true`                 | `Context.Tag` for business logic                 |
+| Dependencies        | `dependencies: [Dep.Default]` in service                | Manual `Layer.provide` at usage sites            |
+| Layers              | `Layer.mergeAll` for flat composition                   | Deeply nested `Layer.provide` chains             |
+| Layer Chaining      | `Layer.provideMerge` for incremental composition        | Multiple `Layer.provide` (creates nested types)  |
+| Errors              | `Schema.TaggedError` with `message` field               | Plain classes or generic Error                   |
+| Error Specificity   | `UserNotFoundError`, `SessionExpiredError`              | Generic `NotFoundError`, `BadRequestError`       |
+| Error Handling      | `catchTag`/`catchTags`                                  | `catchAll` or `mapError`                         |
+| IDs                 | `Schema.UUID.pipe(Schema.brand("@App/EntityId"))`       | Plain `string` for entity IDs                    |
+| Functions           | `Effect.fn("Service.method")`                           | Anonymous generators                             |
+| Happy Path          | gen body is the call graph, error transform is the E    | `catchTag`/`retry` inlined in the gen body       |
+| Error Scoping       | Each layer maps what it received to its own error       | Leaking `SqlError` past the service that made it |
+| Logging             | `Effect.log` with structured data                       | `console.log`                                    |
+| Config              | `Config.*` with validation                              | `process.env` directly                           |
+| Options             | `Option.match` with both cases                          | `Option.getOrThrow`                              |
+| Nullability         | `Option<T>` in domain types                             | `null`/`undefined`                               |
+| Atoms               | `Atom.make` outside components                          | Creating atoms inside render                     |
+| Atom State          | `Atom.keepAlive` for global state                       | Forgetting keepAlive for persistent state        |
+| Atom Updates        | `useAtomSet` in React components                        | `Atom.update` imperatively from React            |
+| Atom Cleanup        | `get.addFinalizer()` for side effects                   | Missing cleanup for event listeners              |
+| Atom Results        | `Result.builder` with `onErrorTag`                      | Ignoring loading/error states                    |
+| Concurrency         | `Effect.all` with `{ concurrency }`                     | `Promise.all` with Effect results                |
+| Background Work     | `Effect.fork` + other work + `Fiber.join`               | `Effect.fork` + immediate `Fiber.join`           |
+| Shared State        | `Ref.make` / `Ref.update`                               | `let` variables mutated in Effects               |
+| Resources           | `Effect.acquireRelease` + `Effect.scoped`               | `try/finally` for cleanup                        |
+| Resource Layers     | `Layer.scoped` / `Effect.Service` scoped                | Global mutable singletons                        |
+| HTTP Endpoints      | `HttpApiEndpoint` + `HttpApiGroup` + `HttpApiBuilder`   | Manual URL parsing / JSON serialization          |
+| HTTP Errors         | `addError` with `HttpApiSchema.annotations({ status })` | Manual `catchTag` in every handler               |
+| HTTP Auth           | `HttpApiSecurity.bearer` + middleware                   | Manual header parsing per route                  |
+| HTTP Client         | `HttpApiClient.make(AppApi)` derived from the contract  | Hand-rolled `fetch` / manual URL + JSON wrappers |
+| Client Interceptors | `HttpClient.transformResponse` / `transformClient`      | Ad-hoc retry/refresh logic per call site         |
+
+## Service Definition Pattern
+
+**Always use `Effect.Service`** for business logic services. This provides automatic accessors, built-in `Default` layer, and proper dependency declaration.
+
+```typescript
+import { Effect } from 'effect'
+
+export class UserService extends Effect.Service<UserService>()('UserService', {
+  accessors: true,
+  dependencies: [UserRepo.Default, CacheService.Default],
+  effect: Effect.gen(function* () {
+    const repo = yield* UserRepo
+    const cache = yield* CacheService
+
+    const findById = Effect.fn('UserService.findById')(function* (id: UserId) {
+      const cached = yield* cache.get(id)
+      if (Option.isSome(cached)) return cached.value
+
+      const user = yield* repo.findById(id)
+      yield* cache.set(id, user)
+      return user
+    })
+
+    const create = Effect.fn('UserService.create')(function* (data: CreateUserInput) {
+      const user = yield* repo.create(data)
+      yield* Effect.log('User created', { userId: user.id })
+      return user
+    })
+
+    return { findById, create }
+  }),
+}) {}
+
+// Usage - dependencies are already wired
+const program = Effect.gen(function* () {
+  const user = yield* UserService.findById(userId)
+  return user
+})
+
+// At app root
+const MainLive = Layer.mergeAll(UserService.Default, OtherService.Default)
+```
+
+**When `Context.Tag` is acceptable:**
+
+- Infrastructure with runtime injection (Cloudflare KV, worker bindings)
+- Factory patterns where resources are provided externally
+
+See `references/service-patterns.md` for detailed patterns.
+
+## Error Definition Pattern
+
+**Always use `Schema.TaggedError`** for errors. This makes them serializable (required for RPC) and provides consistent structure.
+
+```typescript
+import { Schema } from 'effect'
+import { HttpApiSchema } from '@effect/platform'
+
+export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()(
+  'UserNotFoundError',
+  {
+    userId: UserId,
+    message: Schema.String,
+  },
+  HttpApiSchema.annotations({ status: 404 })
+) {}
+
+export class UserCreateError extends Schema.TaggedError<UserCreateError>()(
+  'UserCreateError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.String),
+  },
+  HttpApiSchema.annotations({ status: 400 })
+) {}
+```
+
+**Error handling - use `catchTag`/`catchTags`:**
+
+```typescript
+// CORRECT - preserves type information
+yield *
+  repo.findById(id).pipe(
+    Effect.catchTag('DatabaseError', (err) =>
+      Effect.fail(new UserNotFoundError({ userId: id, message: 'Lookup failed' }))
+    ),
+    Effect.catchTag('ConnectionError', (err) =>
+      Effect.fail(new ServiceUnavailableError({ message: 'Database unreachable' }))
+    )
+  )
+
+// CORRECT - multiple tags at once
+yield *
+  effect.pipe(
+    Effect.catchTags({
+      DatabaseError: (err) =>
+        Effect.fail(new UserNotFoundError({ userId: id, message: err.message })),
+      ValidationError: (err) =>
+        Effect.fail(new InvalidEmailError({ email: input.email, message: err.message })),
+    })
+  )
+```
+
+### Prefer Explicit Over Generic Errors
+
+**Every distinct failure reason deserves its own error type.** Don't collapse multiple failure modes into generic HTTP errors.
+
+```typescript
+// WRONG - Generic errors lose information
+export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
+  'NotFoundError',
+  { message: Schema.String },
+  HttpApiSchema.annotations({ status: 404 })
+) {}
+
+// Then mapping everything to it:
+Effect.catchTags({
+  UserNotFoundError: (err) => Effect.fail(new NotFoundError({ message: 'Not found' })),
+  ChannelNotFoundError: (err) => Effect.fail(new NotFoundError({ message: 'Not found' })),
+  MessageNotFoundError: (err) => Effect.fail(new NotFoundError({ message: 'Not found' })),
+})
+// Frontend gets useless: { _tag: "NotFoundError", message: "Not found" }
+// Which resource? User? Channel? Message? Can't tell!
+```
+
+```typescript
+// CORRECT - Explicit domain errors with rich context
+export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()(
+  'UserNotFoundError',
+  { userId: UserId, message: Schema.String },
+  HttpApiSchema.annotations({ status: 404 })
+) {}
+
+export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundError>()(
+  'ChannelNotFoundError',
+  { channelId: ChannelId, message: Schema.String },
+  HttpApiSchema.annotations({ status: 404 })
+) {}
+
+export class SessionExpiredError extends Schema.TaggedError<SessionExpiredError>()(
+  'SessionExpiredError',
+  { sessionId: SessionId, expiredAt: Schema.DateTimeUtc, message: Schema.String },
+  HttpApiSchema.annotations({ status: 401 })
+) {}
+
+// Frontend can now show specific UI:
+// - UserNotFoundError → "User doesn't exist"
+// - ChannelNotFoundError → "Channel was deleted"
+// - SessionExpiredError → "Your session expired. Please log in again."
+```
+
+See `references/error-patterns.md` for error remapping and retry patterns.
+
+## Schema & Branded Types Pattern
+
+**Brand all entity IDs** for type safety across service boundaries:
+
+```typescript
+import { Schema } from 'effect'
+
+// Entity IDs - always branded
+export const UserId = Schema.UUID.pipe(Schema.brand('@App/UserId'))
+export type UserId = Schema.Schema.Type<typeof UserId>
+
+export const OrganizationId = Schema.UUID.pipe(Schema.brand('@App/OrganizationId'))
+export type OrganizationId = Schema.Schema.Type<typeof OrganizationId>
+
+// Domain types - use Schema.Struct
+export const User = Schema.Struct({
+  id: UserId,
+  email: Schema.String,
+  name: Schema.String,
+  organizationId: OrganizationId,
+  createdAt: Schema.DateTimeUtc,
+})
+export type User = Schema.Schema.Type<typeof User>
+
+// Input types for mutations
+export const CreateUserInput = Schema.Struct({
+  email: Schema.String.pipe(Schema.pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)),
+  name: Schema.String.pipe(Schema.minLength(1)),
+  organizationId: OrganizationId,
+})
+export type CreateUserInput = Schema.Schema.Type<typeof CreateUserInput>
+```
+
+**When NOT to brand:**
+
+- Simple strings that don't cross service boundaries (URLs, file paths)
+- Primitive config values
+
+See `references/schema-patterns.md` for transforms and advanced patterns.
+
+## Function Pattern with Effect.fn
+
+**Always use `Effect.fn`** for service methods. This provides automatic tracing with proper span names:
+
+```typescript
+// CORRECT - Effect.fn with descriptive name
+const findById = Effect.fn('UserService.findById')(function* (id: UserId) {
+  yield* Effect.annotateCurrentSpan('userId', id)
+  const user = yield* repo.findById(id)
+  return user
+})
+
+// CORRECT - Effect.fn with multiple parameters
+const transfer = Effect.fn('AccountService.transfer')(function* (
+  fromId: AccountId,
+  toId: AccountId,
+  amount: number
+) {
+  yield* Effect.annotateCurrentSpan('fromId', fromId)
+  yield* Effect.annotateCurrentSpan('toId', toId)
+  yield* Effect.annotateCurrentSpan('amount', amount)
+  // ...
+})
+```
+
+### The gen body is A, the pipe is E
+
+The gen body is the call graph: every `yield*` is an A flowing through it. Error handling lives in the transform after the generator, which enumerates every E the body can produce:
+
+```typescript
+const insert = Effect.fn('TweetRepo.insert')(
+  // A - the graph, and nothing else
+  function* (input: NewTweet) {
+    const rows = yield* sql`insert into tweets ${sql.insert(input)} returning *`
+    return yield* Schema.decodeUnknown(Tweet)(rows[0])
+  },
+  // E - the complete enumeration
+  (effect, input) =>
+    effect.pipe(
+      Effect.retry({ times: 2, schedule: Schedule.exponential('100 millis') }),
+      Effect.catchTag(
+        'SqlError',
+        (e) => new PersistenceError({ op: 'TweetRepo.insert', cause: e.message })
+      ),
+      // a decode failure here is our bug, not the caller's problem
+      Effect.catchTag('ParseError', (e) => Effect.die(e))
+    )
+)
+```
+
+Read the actual E type of every yielded effect before writing the transform — the pipe is a complete enumeration, not a guess.
+
+**Scope E per layer.** Each layer catches what _it_ received and produces its own error: a service turns `SqlError` into `PersistenceError`, a handler turns `PersistenceError` into a response. Consumers stay ignorant of errors from three layers down.
+
+**Divergent strategies** are the one case for handling errors inside the gen body — two yields needing different failure semantics, one failing hard while the other falls back, where the outer transform cannot tell which yield failed. Handle that single effect inline and mark it:
+
+```typescript
+yield *
+  timeline.enqueueFanout(tweet.id).pipe(
+    Effect.catchTag('QueueUnavailable', () =>
+      // escape hatch: the tweet exists; timelines can be built on read
+      Effect.logWarning('fanout deferred to lazy pull')
+    )
+  )
+```
+
+## Layer Composition
+
+**Declare dependencies in the service**, not at usage sites:
+
+```typescript
+// CORRECT - dependencies in service definition
+export class OrderService extends Effect.Service<OrderService>()('OrderService', {
+  accessors: true,
+  dependencies: [UserService.Default, ProductService.Default, PaymentService.Default],
+  effect: Effect.gen(function* () {
+    const users = yield* UserService
+    const products = yield* ProductService
+    const payments = yield* PaymentService
+    // ...
+  }),
+}) {}
+
+// At app root - simple merge
+const AppLive = Layer.mergeAll(
+  OrderService.Default,
+  // Infrastructure layers (intentionally not in dependencies)
+  DatabaseLive,
+  RedisLive
+)
+```
+
+**Layer composition patterns:**
+
+```typescript
+// Use Layer.mergeAll for flat composition of same-level layers
+const RepoLive = Layer.mergeAll(UserRepo.Default, OrderRepo.Default, ProductRepo.Default)
+
+// Use Layer.provideMerge for incremental chaining (flatter types than Layer.provide)
+const MainLive = DatabaseLive.pipe(
+  Layer.provideMerge(ConfigServiceLive),
+  Layer.provideMerge(LoggerLive),
+  Layer.provideMerge(CacheLive)
+)
+```
+
+**Why layers over `Effect.provide`:**
+
+- **Deduplication**: Layers memoize construction - same service instantiated once. `Effect.provide` creates new instances each call.
+- **TypeScript performance**: Deep `Layer.provide` nesting creates complex recursive types that slow the LSP. `Layer.mergeAll` and `Layer.provideMerge` produce flatter types.
+- **Resource management**: Scoped layers properly share and clean up resources.
+
+See `references/layer-patterns.md` for testing layers, config-dependent layers, and the `layerConfig` pattern.
+
+## Option Handling
+
+**Never use `Option.getOrThrow`**. Always handle both cases explicitly:
+
+```typescript
+// CORRECT - explicit handling
+yield *
+  Option.match(maybeUser, {
+    onNone: () => Effect.fail(new UserNotFoundError({ userId, message: 'Not found' })),
+    onSome: (user) => Effect.succeed(user),
+  })
+
+// CORRECT - with getOrElse for defaults
+const name = Option.getOrElse(maybeName, () => 'Anonymous')
+
+// CORRECT - Option.map for transformations
+const upperName = Option.map(maybeName, (n) => n.toUpperCase())
+```
+
+## Effect Atom (Frontend State)
+
+Effect Atom provides reactive state management for React with Effect integration.
+
+### Basic Atoms
+
+```typescript
+import { Atom } from '@effect-atom/atom-react'
+
+// Define atoms OUTSIDE components
+const countAtom = Atom.make(0)
+
+// Use keepAlive for global state that should persist
+const userPrefsAtom = Atom.make({ theme: 'dark' }).pipe(Atom.keepAlive)
+
+// Atom families for per-entity state
+const modalAtomFamily = Atom.family((type: string) =>
+  Atom.make({ isOpen: false }).pipe(Atom.keepAlive)
+)
+```
+
+### React Integration
+
+```typescript
+import { useAtomValue, useAtomSet, useAtom, useAtomMount } from "@effect-atom/atom-react"
+
+function Counter() {
+    const count = useAtomValue(countAtom)           // Read only
+    const setCount = useAtomSet(countAtom)          // Write only
+    const [value, setValue] = useAtom(countAtom)    // Read + write
+
+    return <button onClick={() => setCount((c) => c + 1)}>{count}</button>
+}
+
+// Mount side-effect atoms without reading value
+function App() {
+    useAtomMount(keyboardShortcutsAtom)
+    return <>{children}</>
+}
+```
+
+### Handling Results with Result.builder
+
+**Use `Result.builder`** for rendering effectful atom results. It provides chainable error handling with `onErrorTag`:
+
+```typescript
+import { Result } from "@effect-atom/atom-react"
+
+function UserProfile() {
+    const userResult = useAtomValue(userAtom) // Result<User, Error>
+
+    return Result.builder(userResult)
+        .onInitial(() => <div>Loading...</div>)
+        .onErrorTag("NotFoundError", () => <div>User not found</div>)
+        .onError((error) => <div>Error: {error.message}</div>)
+        .onSuccess((user) => <div>Hello, {user.name}</div>)
+        .render()
+}
+```
+
+### Atoms with Side Effects
+
+```typescript
+const scrollYAtom = Atom.make((get) => {
+  const onScroll = () => get.setSelf(window.scrollY)
+
+  window.addEventListener('scroll', onScroll)
+  get.addFinalizer(() => window.removeEventListener('scroll', onScroll)) // REQUIRED
+
+  return window.scrollY
+}).pipe(Atom.keepAlive)
+```
+
+### React Mutations
+
+For mutation atoms, derive loading state from `result.waiting` instead of `useState`:
+
+```typescript
+const [result, mutate] = useAtom(deleteMutation, { mode: 'promise' })
+const isLoading = result.waiting // Updates automatically, no useState/finally needed
+```
+
+**Dialog ownership:** Move mutation logic into dialog components. Dialog owns the mutation hook, loading state, and toasts. Parent provides data props and an `onSuccess` callback.
+
+**Cache invalidation:** Use `reactivityKeys` on both mutation and query atoms to auto-invalidate queries after mutations — replaces manual `refresh()` calls.
+
+See `references/effect-atom-patterns.md` for complete patterns including families, localStorage, mutations, and anti-patterns.
+
+## RPC & Cluster Patterns
+
+For RPC contracts and cluster workflows, see:
+
+- `references/rpc-cluster-patterns.md` - RpcGroup, Workflow.make, Activity patterns
+
+## Concurrency
+
+**Use `Effect.all` with `{ concurrency }`** for parallel execution. Use `Effect.fork` for background work:
+
+```typescript
+import { Effect, Fiber, Queue } from 'effect'
+
+// Parallel execution with bounded concurrency
+const results = yield * Effect.all(tasks, { concurrency: 5 })
+
+// Background work with fork
+const program = Effect.gen(function* () {
+  const fiber = yield* Effect.fork(backgroundTask)
+  const mainResult = yield* doMainWork()
+  const bgResult = yield* Fiber.join(fiber)
+  return { mainResult, bgResult }
+})
+
+// Producer/consumer with Queue
+const queue = yield * Queue.bounded<Job>(100)
+yield *
+  Effect.fork(
+    Effect.forever(
+      Effect.gen(function* () {
+        const job = yield* Queue.take(queue)
+        yield* processJob(job)
+      })
+    )
+  )
+```
+
+See `references/concurrency-patterns.md` for Fork/Fiber variants, Queue, PubSub, Semaphore, Deferred, Latch, and polling patterns.
+
+## Resource Management
+
+**Use `Effect.acquireRelease`** for resources that need cleanup. Release is guaranteed on success, failure, and interruption:
+
+```typescript
+import { Effect } from 'effect'
+
+const managedConnection = Effect.acquireRelease(
+  connectToDatabase(), // acquire
+  (conn) => conn.close().pipe(Effect.orDie) // release (guaranteed)
+)
+
+// Use with Effect.scoped
+const result =
+  yield *
+  Effect.scoped(
+    Effect.gen(function* () {
+      const conn = yield* managedConnection
+      return yield* conn.query('SELECT * FROM users')
+    })
+  )
+```
+
+See `references/resource-patterns.md` for resource hierarchies, pooling, ManagedRuntime, and scoped layers.
+
+## HTTP API
+
+**Use `HttpApiEndpoint` + `HttpApiGroup` + `HttpApiBuilder`** for type-safe HTTP APIs:
+
+```typescript
+import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup } from '@effect/platform'
+
+// Define endpoint
+const getUser = HttpApiEndpoint.get('getUser', '/users/:id').pipe(
+  HttpApiEndpoint.setPath(Schema.Struct({ id: UserId })),
+  HttpApiEndpoint.setSuccess(User),
+  HttpApiEndpoint.addError(UserNotFoundError) // Automatically 404
+)
+
+const UsersApi = HttpApiGroup.make('users').pipe(HttpApiGroup.add(getUser))
+
+// Implement handler
+const UsersApiLive = HttpApiBuilder.group(MyApi, 'users', (handlers) =>
+  handlers.pipe(HttpApiBuilder.handle('getUser', ({ path }) => UserService.findById(path.id)))
+)
+```
+
+On the client side, derive a fully-typed client from the same `HttpApi` with `HttpApiClient.make(MyApi)` — every endpoint, payload, success, and typed error comes from the contract, so no manual URL strings or JSON wrappers:
+
+```typescript
+import { HttpApiClient } from '@effect/platform'
+
+const program = Effect.gen(function* () {
+  const client = yield* HttpApiClient.make(MyApi, { baseUrl: 'http://localhost:3000' })
+  const user = yield* client.users.getUser({ path: { id: userId } })
+  // ^? typed error union (e.g. UserNotFoundError) on the Effect error channel
+})
+```
+
+See `references/http-api-patterns.md` for middleware, authentication, CORS, rate limiting, OpenAPI/Swagger setup, and the full **Deriving an HTTP Client** section (base URL, `transformClient` interceptors, auth-refresh, typed error extraction, Promise bridging).
+
+## Anti-Patterns (Forbidden)
+
+These patterns are **never acceptable**:
+
+```typescript
+// FORBIDDEN - runSync/runPromise inside services
+const result = Effect.runSync(someEffect) // Never do this
+
+// FORBIDDEN - throw inside Effect.gen
+yield* Effect.gen(function* () {
+    if (bad) throw new Error("No!") // Use Effect.fail instead
+})
+
+// FORBIDDEN - catchAll losing type info
+yield* effect.pipe(Effect.catchAll(() => Effect.fail(new GenericError())))
+
+// FORBIDDEN - console.log
+console.log("debug") // Use Effect.log
+
+// FORBIDDEN - process.env directly
+const key = process.env.API_KEY // Use Config.string("API_KEY")
+
+// FORBIDDEN - null/undefined in domain types
+type User = { name: string | null } // Use Option<string>
+
+// FORBIDDEN - deeply nested flatMap/andThen chains
+step1().pipe(Effect.flatMap((a) => step2(a).pipe(Effect.flatMap(...)))) // Use Effect.gen
+
+// FORBIDDEN - manual try/finally for resource cleanup
+try { yield* use(res) } finally { yield* cleanup(res) } // Use Effect.acquireRelease + Effect.scoped
+
+// FORBIDDEN - manual retry loops
+for (let i = 0; i < 3; i++) { try { ... } catch { ... } } // Use Effect.retry + Schedule
+
+// FORBIDDEN - prop-drilling dependencies through function args
+const fn = (db: DB, logger: Logger, mailer: Mailer) => ... // Use Effect.Service + Layer
+```
+
+See `references/anti-patterns.md` for the complete list with rationale.
+
+## Observability
+
+```typescript
+// Structured logging
+yield * Effect.log('Processing order', { orderId, userId, amount })
+
+// Metrics
+const orderCounter = Metric.counter('orders_processed')
+yield * Metric.increment(orderCounter)
+
+// Config with validation
+const config = Config.all({
+  port: Config.integer('PORT').pipe(Config.withDefault(3000)),
+  apiKey: Config.redacted('API_KEY'),
+  maxRetries: Config.integer('MAX_RETRIES').pipe(
+    Config.validate({ message: 'Must be positive', validation: (n) => n > 0 })
+  ),
+})
+```
+
+See `references/observability-patterns.md` for metrics and tracing patterns.
+
+## Reference Files
+
+For detailed patterns, consult these reference files in the `references/` directory:
+
+- `language-server.md` - Effect Language Service setup, diagnostics, refactors, CLI tools
+- `service-patterns.md` - Service definition, Effect.fn, Context.Tag exceptions
+- `error-patterns.md` - Schema.TaggedError, error remapping, retry patterns
+- `schema-patterns.md` - Branded types, transforms, Schema.Class
+- `layer-patterns.md` - Dependency composition, testing layers
+- `rpc-cluster-patterns.md` - RpcGroup, Workflow, Activity patterns
+- `effect-atom-patterns.md` - Atom, families, React hooks, Result handling
+- `concurrency-patterns.md` - Fork/Fiber, parallel execution, Queue, PubSub, Semaphore, graceful shutdown
+- `resource-patterns.md` - acquireRelease, scoped, resource hierarchies, pooling, ManagedRuntime
+- `http-api-patterns.md` - HttpApi, endpoints, middleware, auth, CORS, rate limiting, OpenAPI
+- `anti-patterns.md` - Complete list of forbidden patterns
+- `observability-patterns.md` - Logging, metrics, config patterns
