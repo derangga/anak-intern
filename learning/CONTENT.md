@@ -80,8 +80,27 @@ by the code block it sits in, and a type worth teaching should be pinned on
 the page rather than hidden behind a hover. If a type matters, mark it with
 `^?`.
 
+The `^?` must sit on the line directly below the one where the name appears,
+with the caret under the name's first letter. That means the declaration has
+to fit on one line. This fails, because the line above the marker is `})`:
+
+```
+const log = Effect.sync(() => {
+  console.log('done')
+})
+//    ^?
+```
+
+Write it as `const log = Effect.sync(() => console.log('done'))` instead. Also
+note that `declare` lines are stripped before the query runs, so you cannot
+point `^?` at one.
+
 `// ---cut---` hides everything above it from the reader while still
 compiling it. Use it to skip imports and setup that were already shown.
+
+When a snippet does fail to compile, `bun run check:content` prints which file
+and which numbered twoslash block broke, followed by the compiler error. Line
+numbers in the error count from the start of that block, after the cut.
 
 **Untagged.** Highlighted only, never compiled. Use for fragments, for
 deliberately wrong code you are about to fix, and for anything that cannot

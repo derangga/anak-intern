@@ -12,7 +12,8 @@ import { join } from 'node:path'
 import { render } from '../vite-plugin-markdown.ts'
 
 const dir = join(import.meta.dirname, '..', 'content')
-const files = (await readdir(dir)).filter((f) => f.endsWith('.md'))
+// Sorted so output reads in chapter order. readdir does not promise one.
+const files = (await readdir(dir)).filter((f) => f.endsWith('.md')).sort()
 
 assert.ok(files.length > 0, 'no chapters found in content/')
 
@@ -22,7 +23,42 @@ const seenOrders = new Set<number>()
 for (const file of files) {
   const path = join(dir, file)
   const source = await readFile(path, 'utf8')
-  const { meta, headings, hasMermaid, html } = await render(source, path)
+
+  // Twoslash failures name a line number inside one snippet, with no hint as
+  // to which snippet or file. Catching here and pointing at the exact fence
+  // turns a guessing game into a fix.
+  let rendered: Awaited<ReturnType<typeof render>>
+  try {
+    rendered = await render(source, path)
+  } catch (error) {
+    console.error(`\nFAILED in ${file}`)
+
+    // Re-render each twoslash fence on its own to find the one that throws.
+    // Slower than the single pass, but this only runs on the failure path.
+    const fences = [...source.matchAll(/^```(\w+[^\n]*)\n([\s\S]*?)^```$/gm)]
+      .filter((f) => f[1].includes('twoslash'))
+    for (const [index, fence] of fences.entries()) {
+      const only = `---\ntitle: t\nsummary: s\norder: 0\nslug: s\n---\n\n\`\`\`${fence[1]}\n${fence[2]}\`\`\`\n`
+      try {
+        await render(only, path)
+      } catch {
+        const numbered = fence[2]
+          .split('\n')
+          .map((line, i) => `${String(i + 1).padStart(3)} | ${line}`)
+          .join('\n')
+        console.error(
+          `twoslash block ${index + 1} of ${fences.length} is the one that fails:\n${numbered}`,
+        )
+        break
+      }
+    }
+    console.error(
+      `\nLine numbers in the error below count from the start of that snippet,\nafter any \`// ---cut---\`.\n`,
+    )
+    throw error
+  }
+
+  const { meta, headings, hasMermaid, html } = rendered
 
   assert.ok(meta.title, `${file}: missing frontmatter title`)
   assert.ok(meta.summary, `${file}: missing frontmatter summary`)
