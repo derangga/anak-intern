@@ -40,8 +40,17 @@ const getUser = (id: number): Effect.Effect<string, 'NotFound'> =>
 
 The failure is still in the type, where the caller can see it.
 
-The rule: `runPromise` belongs in a click handler, a route, or a `main`. If it
-is in the middle of your code, something is wrong.
+The rule: `runPromise` belongs at the edge of your program, and nowhere else.
+
+The edge is wherever something that does not speak Effect calls in. That is a
+click handler or a route in a browser app, and it is an HTTP request handler, a
+queue consumer, a scheduled job, a CLI `main`, or the body of a test on a
+server. Same idea either way: one place where the description finally becomes
+work.
+
+Everything inside that boundary should hand back an Effect and let the caller
+decide. If `runPromise` shows up in the middle of your code, something is
+wrong.
 
 ## Promising that code cannot throw
 
