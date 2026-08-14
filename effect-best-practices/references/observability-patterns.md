@@ -1,5 +1,9 @@
 # Observability Patterns
 
+> **Effect v4.** `Effect.log*` and `Effect.fn` tracing are unchanged. `Metric` gained/renamed
+> several operations, `LogLevel` values are now plain string literals, and `Config` moved
+> validation into Schema checks.
+
 ## Structured Logging with Effect.log
 
 **Always use Effect.log** instead of console.log. Effect.log provides:
@@ -72,6 +76,9 @@ const processPayment = Effect.fn("PaymentService.processPayment")(
 )
 ```
 
+`Effect.fnUntraced` is the opt-out for hot paths, or for functions that only wrap an
+`Effect.gen` and don't warrant their own span.
+
 ### Naming Convention
 
 Use `ServiceName.methodName` format consistently:
@@ -113,10 +120,22 @@ const processOrder = Effect.fn("OrderService.process")(function* (orderId: Order
 
 ## Metrics
 
+v4 consolidated the metric mutators. `Metric.increment` / `set` / `decrement` are gone:
+
+| v3 | v4 |
+| --- | --- |
+| `Metric.increment(counter)` | `Metric.update(counter, 1)` |
+| `Metric.set(gauge, v)` | `Metric.update(gauge, v)` — absolute value |
+| `Metric.decrement(gauge)` | `Metric.modify(gauge, -1)` — delta |
+| `Metric.tagged(k, v)` | `Metric.withAttributes(metric, { [k]: v })` |
+| `Metric.timerWithHistogram(h)` | `Metric.timer(name, options)` |
+
+`update` sets a gauge's absolute value; `modify` applies a delta. For counters, `update` adds.
+
 ### Counter
 
 ```typescript
-import { Metric } from "effect"
+import { Effect, Metric } from "effect"
 
 // Define metrics at module level
 const ordersProcessed = Metric.counter("orders_processed", {
@@ -130,24 +149,28 @@ const ordersFailed = Metric.counter("orders_failed", {
 // Use in service
 const processOrder = Effect.fn("OrderService.process")(function* (input: OrderInput) {
     return yield* process(input).pipe(
-        Effect.tap(() => Metric.increment(ordersProcessed)),
-        Effect.tapError(() => Metric.increment(ordersFailed)),
+        Effect.tap(() => Metric.update(ordersProcessed, 1)),
+        Effect.tapError(() => Metric.update(ordersFailed, 1)),
     )
 })
 ```
 
-### Counter with Tags
+### Counter with Attributes
+
+v3's tags are v4's **attributes**, applied to the metric rather than piped onto the update:
 
 ```typescript
 const httpRequests = Metric.counter("http_requests_total", {
     description: "Total HTTP requests",
 })
 
-// Tag with method and status
-yield* Metric.increment(httpRequests).pipe(
-    Metric.tagged("method", request.method),
-    Metric.tagged("status", String(response.status)),
-    Metric.tagged("path", request.path),
+yield* Metric.update(
+    Metric.withAttributes(httpRequests, {
+        method: request.method,
+        status: String(response.status),
+        path: request.path,
+    }),
+    1,
 )
 ```
 
@@ -158,15 +181,15 @@ const activeConnections = Metric.gauge("active_connections", {
     description: "Number of active connections",
 })
 
-// Update gauge
-yield* Metric.set(activeConnections, connectionCount)
+// Set an absolute value
+yield* Metric.update(activeConnections, connectionCount)
 
-// Or increment/decrement
-yield* Metric.increment(activeConnections)
-yield* Metric.decrement(activeConnections)
+// Apply a delta
+yield* Metric.modify(activeConnections, 1)
+yield* Metric.modify(activeConnections, -1)
 ```
 
-### Histogram
+### Histogram and Timer
 
 ```typescript
 const requestDuration = Metric.histogram("request_duration_ms", {
@@ -177,29 +200,34 @@ const requestDuration = Metric.histogram("request_duration_ms", {
 // Record value
 yield* Metric.update(requestDuration, durationMs)
 
-// Or use timer helper
-const timedEffect = effect.pipe(
-    Metric.timerWithHistogram(requestDuration),
-)
+// Metric.timer builds a duration histogram directly
+const handlerDuration = Metric.timer("handler_duration", {
+    description: "Handler execution time",
+})
 ```
 
 ## Configuration with Config
 
-**Always use Config** instead of process.env:
+**Always use Config** instead of process.env.
+
+v4 renames: `Config.integer` → `Config.int`, `Config.literal(...)(name)` →
+`Config.literals([...], name)`, `Config.secret` → `Config.redacted`, and `Config.validate` →
+`Config.schema` with a Schema check. The error type is `Config.ConfigError` (the `ConfigError`
+module is gone).
 
 ### Basic Config
 
 ```typescript
-import { Config, Effect } from "effect"
+import { Config, Effect, Layer } from "effect"
 
 const config = Config.all({
-    port: Config.integer("PORT").pipe(Config.withDefault(3000)),
+    port: Config.int("PORT").pipe(Config.withDefault(3000)),
     host: Config.string("HOST").pipe(Config.withDefault("localhost")),
-    env: Config.literal("development", "staging", "production")("NODE_ENV"),
+    env: Config.literals(["development", "staging", "production"], "NODE_ENV"),
 })
 
-// Use in layer
-const ServerLive = Layer.unwrapEffect(
+// Use in a layer — Layer.unwrapEffect became Layer.unwrap
+const ServerLive = Layer.unwrap(
     Effect.gen(function* () {
         const { port, host, env } = yield* config
         return Layer.succeed(ServerConfig, { port, host, env })
@@ -207,31 +235,40 @@ const ServerLive = Layer.unwrapEffect(
 )
 ```
 
+`Config.port` is a built-in for the common case: it validates 1–65535 for you.
+
 ### Config with Validation
 
+Validation moved into Schema. Attach checks to a schema and read it with `Config.schema`:
+
 ```typescript
+import { Config, Schema } from "effect"
+
 const dbConfig = Config.all({
     host: Config.string("DB_HOST"),
-    port: Config.integer("DB_PORT").pipe(
-        Config.validate({
-            message: "Port must be between 1 and 65535",
-            validation: (p) => p >= 1 && p <= 65535,
-        })
-    ),
+
+    // Built-in: validates the 1..65535 range
+    port: Config.port("DB_PORT"),
+
     database: Config.string("DB_NAME"),
-    maxConnections: Config.integer("DB_MAX_CONNECTIONS").pipe(
-        Config.withDefault(10),
-        Config.validate({
-            message: "Max connections must be positive",
-            validation: (n) => n > 0,
-        })
-    ),
+
+    // Custom range via a Schema check
+    maxConnections: Config.schema(
+        Schema.Int.check(Schema.isGreaterThan(0)),
+        "DB_MAX_CONNECTIONS",
+    ).pipe(Config.withDefault(10)),
 })
 ```
+
+The check's own annotations carry the failure message —
+`Schema.isGreaterThan(0, { description: "Max connections must be positive" })` — replacing v3's
+`{ message, validation }` pair.
 
 ### Redacted Config
 
 ```typescript
+import { Config, Effect, Redacted } from "effect"
+
 // For sensitive values that shouldn't be logged
 const secretConfig = Config.all({
     apiKey: Config.redacted("API_KEY"),           // Returns Redacted<string>
@@ -250,57 +287,76 @@ const program = Effect.gen(function* () {
 })
 ```
 
+v3's `Config.secret` was removed — `Config.redacted` already returns `Redacted<string>`. To
+redact an existing config value, use `Config.map(config, Redacted.make)`.
+
 ### Config with Nested Structure
 
 ```typescript
 const appConfig = Config.all({
     server: Config.all({
-        port: Config.integer("SERVER_PORT"),
+        port: Config.int("SERVER_PORT"),
         host: Config.string("SERVER_HOST"),
     }),
     database: Config.all({
         url: Config.string("DATABASE_URL"),
-        pool: Config.integer("DATABASE_POOL_SIZE").pipe(Config.withDefault(10)),
+        pool: Config.int("DATABASE_POOL_SIZE").pipe(Config.withDefault(10)),
     }),
     features: Config.all({
         enableBeta: Config.boolean("ENABLE_BETA").pipe(Config.withDefault(false)),
-        maxUploadSize: Config.integer("MAX_UPLOAD_SIZE").pipe(Config.withDefault(10485760)),
+        maxUploadSize: Config.int("MAX_UPLOAD_SIZE").pipe(Config.withDefault(10485760)),
     }),
 })
 ```
 
+Use `Config.nested` to compose lookup path prefixes — parsing no longer takes a public path
+prefix argument.
+
 ## Log Level Configuration
 
+`LogLevel` values are **string literals** in v4, not branded objects: `"Fatal" | "Error" |
+"Warn" | "Info" | "Debug" | "Trace" | "All" | "None"`. Note `Warning` became `"Warn"`.
+
+The minimum level is a context reference, so it's set with a layer:
+
 ```typescript
-import { Logger, LogLevel } from "effect"
+import { Config, Effect, Layer, References } from "effect"
 
-// Set log level via config
-const LoggerLive = Layer.unwrapEffect(
+// v3: Logger.minimumLogLevel(level)
+const LogLevelLive = Layer.unwrap(
     Effect.gen(function* () {
-        const level = yield* Config.literal(
-            "debug", "info", "warning", "error"
-        )("LOG_LEVEL").pipe(Config.withDefault("info"))
-
-        const logLevel = {
-            debug: LogLevel.Debug,
-            info: LogLevel.Info,
-            warning: LogLevel.Warning,
-            error: LogLevel.Error,
-        }[level]
-
-        return Logger.minimumLogLevel(logLevel)
+        const level = yield* Config.logLevel("LOG_LEVEL").pipe(Config.withDefault("Info"))
+        return Layer.succeed(References.MinimumLogLevel, level)
     })
 )
-
-// Production: structured JSON logging
-const JsonLoggerLive = Logger.json
 ```
+
+`Config.logLevel(name)` parses and validates the literal for you — no manual lookup table.
+
+For production JSON logging, `Logger.json` was replaced by `Logger.layer`, which **replaces**
+the active logger set. Include `Logger.tracerLogger` to keep v3's built-in behavior of emitting
+log events to the tracer:
+
+```typescript
+import { Logger } from "effect"
+
+const JsonLoggerLive = Logger.layer([Logger.consoleJson, Logger.tracerLogger])
+
+// Pretty console output for development
+const PrettyLoggerLive = Logger.layer([Logger.consolePretty(), Logger.tracerLogger])
+```
+
+Omit `tracerLogger` only when you intentionally want trace log events disabled.
+
+Other v3 `FiberRef`-based knobs are now `References` too — `References.CurrentLogLevel`,
+`References.CurrentLogAnnotations`, `References.TracerEnabled` — all set with
+`Effect.provideService` or a `Layer.succeed`. See `v4-semantics.md`.
 
 ## Combining Observability
 
 ```typescript
 const processOrder = Effect.fn("OrderService.process")(function* (input: OrderInput) {
-    const startTime = yield* Effect.clockWith((clock) => clock.currentTimeMillis)
+    const startTime = yield* Clock.currentTimeMillis
 
     // Annotate span
     yield* Effect.annotateCurrentSpan("orderId", input.orderId)
@@ -310,14 +366,13 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
     yield* Effect.log("Processing order", { orderId: input.orderId })
 
     const result = yield* process(input).pipe(
-        Effect.tap((order) =>
+        Effect.tap(() =>
             Effect.gen(function* () {
-                const endTime = yield* Effect.clockWith((c) => c.currentTimeMillis)
-                const duration = endTime - startTime
+                const duration = (yield* Clock.currentTimeMillis) - startTime
 
-                // Record metric
+                // Record metrics
                 yield* Metric.update(orderProcessingDuration, duration)
-                yield* Metric.increment(ordersProcessed)
+                yield* Metric.update(ordersProcessed, 1)
 
                 // Log completion
                 yield* Effect.log("Order processed", {
@@ -328,7 +383,7 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
         ),
         Effect.tapError((err) =>
             Effect.gen(function* () {
-                yield* Metric.increment(ordersFailed)
+                yield* Metric.update(ordersFailed, 1)
                 yield* Effect.logError("Order processing failed", {
                     orderId: input.orderId,
                     error: err._tag,
@@ -340,3 +395,6 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
     return result
 })
 ```
+
+`Clock.currentTimeMillis` is yieldable directly — `Effect.clockWith((c) => c.currentTimeMillis)`
+still works but is unnecessary here.

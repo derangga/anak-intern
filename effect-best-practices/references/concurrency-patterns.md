@@ -1,8 +1,12 @@
 # Concurrency Patterns
 
+> **Effect v4.** The `fork*` family was renamed, `Semaphore` moved to its own module, and
+> `Fiber` / `Deferred` are no longer `Effect` subtypes — always call `Fiber.join(fiber)` and
+> `Deferred.await(d)` rather than yielding the value itself. See `v4-semantics.md`.
+
 ## Fork & Fiber Patterns
 
-**Use `Effect.fork`** to run effects in the background as fibers. Fibers are lightweight, cooperative threads managed by Effect's runtime.
+**Use `Effect.forkChild`** to run effects in the background as fibers. Fibers are lightweight, cooperative threads managed by Effect's runtime.
 
 ### Basic Fork
 
@@ -11,7 +15,7 @@ import { Effect, Fiber } from "effect"
 
 const program = Effect.gen(function* () {
     // Fork a background task — does NOT block
-    const fiber = yield* Effect.fork(backgroundWork)
+    const fiber = yield* Effect.forkChild(backgroundWork)
 
     // Do other work while background runs
     const mainResult = yield* doMainWork()
@@ -23,18 +27,26 @@ const program = Effect.gen(function* () {
 })
 ```
 
+`yield* fiber` was valid in v3 because `Fiber` extended `Effect`. In v4 it is a type error —
+use `Fiber.join`.
+
 ### Fork Variants
 
-| Variant | Lifetime | Use Case |
-|---------|----------|----------|
-| `Effect.fork` | Parent scope | Default — fiber interrupted when parent scope ends |
-| `Effect.forkDaemon` | Application lifetime | Long-running background tasks (health checks, watchers) |
-| `Effect.forkScoped` | Enclosing `Effect.scoped` | Fiber interrupted when scope closes |
+| v4 | v3 name | Lifetime | Use Case |
+|---------|------|----------|----------|
+| `Effect.forkChild` | `Effect.fork` | Parent fiber | Default — interrupted when the parent ends |
+| `Effect.forkDetach` | `Effect.forkDaemon` | Application lifetime | Long-running background tasks (health checks, watchers) |
+| `Effect.forkScoped` | unchanged | Enclosing `Scope` | Fiber interrupted when scope closes |
+| `Effect.forkIn` | unchanged | A specific `Scope` | Fiber tied to a scope you choose |
+
+`Effect.forkAll` and `Effect.forkWithErrorHandler` were **removed**. Fork individually with
+`forkChild`, or use `Effect.all` / `Effect.forEach` with a `concurrency` option. For error
+handling on a forked fiber, observe it with `Fiber.join` or `Fiber.await`.
 
 ```typescript
-// Daemon fiber — lives until app exits
+// Detached fiber — lives until app exits
 const healthCheck = Effect.gen(function* () {
-    yield* Effect.forkDaemon(
+    yield* Effect.forkDetach(
         Effect.repeat(
             checkHealth,
             Schedule.spaced("30 seconds"),
@@ -52,6 +64,22 @@ const scopedWorker = Effect.scoped(
 )
 ```
 
+### Fork Options
+
+All four variants accept an options object in v4:
+
+```typescript
+const fiber = yield* Effect.forkChild(task, {
+    startImmediately: true,      // run now rather than deferring to the scheduler
+    uninterruptible: "inherit",  // true | "inherit" | undefined
+})
+```
+
+- **`startImmediately`** — when `true`, the fiber begins executing immediately instead of being
+  deferred. Useful when the fork must observe state before the parent mutates it.
+- **`uninterruptible`** — `true` makes the fiber uninterruptible, `"inherit"` takes the parent's
+  interruptibility, `undefined` uses the default.
+
 ### Fiber Operations
 
 ```typescript
@@ -65,7 +93,7 @@ const exit = yield* Fiber.await(fiber)
 yield* Fiber.interrupt(fiber)
 ```
 
-> See also: `anti-patterns.md` — [Fork + Immediate Join] for why `Effect.fork` + immediate `Fiber.join` is pointless
+> See also: `anti-patterns.md` — [Fork + Immediate Join] for why `Effect.forkChild` + immediate `Fiber.join` is pointless
 
 ## Parallel Execution
 
@@ -97,15 +125,20 @@ const processed = yield* Effect.forEach(
 
 ### Short-Circuiting
 
-By default, parallel operations short-circuit on first failure. Use `{ mode: "either" }` or `{ mode: "validate" }` to collect all results:
+By default, parallel operations short-circuit on first failure. Use `{ mode: "result" }` to run
+everything and collect each outcome:
 
 ```typescript
-// Collect all successes and failures
+// Collect all successes and failures as Results
 const results = yield* Effect.all(tasks, {
     concurrency: "unbounded",
-    mode: "either",
+    mode: "result",
 })
 ```
+
+v3's `mode: "either"` is `mode: "result"` in v4 (`Either` became `Result`), and
+`Effect.allSuccesses` was folded into this option — run with `mode: "result"`, then keep the
+`Result.Success` values.
 
 ## Queue
 
@@ -116,20 +149,20 @@ Queues provide point-to-point communication between fibers with backpressure.
 | Variant | Behavior When Full |
 |---------|-------------------|
 | `Queue.bounded(n)` | Suspends producer until space available (backpressure) |
-| `Queue.unbounded` | Never blocks, grows without limit |
+| `Queue.unbounded()` | Never blocks, grows without limit |
 | `Queue.sliding(n)` | Drops oldest items when full |
 | `Queue.dropping(n)` | Drops newest items when full |
 
 ### Producer/Consumer Pattern
 
 ```typescript
-import { Effect, Queue } from "effect"
+import { Effect, Fiber, Queue } from "effect"
 
 const program = Effect.gen(function* () {
     const queue = yield* Queue.bounded<Job>(100)
 
     // Producer fiber
-    const producer = yield* Effect.fork(
+    const producer = yield* Effect.forkChild(
         Effect.forEach(
             jobs,
             (job) => Queue.offer(queue, job),
@@ -138,7 +171,7 @@ const program = Effect.gen(function* () {
     )
 
     // Consumer fiber
-    const consumer = yield* Effect.fork(
+    const consumer = yield* Effect.forkChild(
         Effect.forever(
             Effect.gen(function* () {
                 const job = yield* Queue.take(queue)
@@ -171,24 +204,34 @@ const item = yield* Queue.take(queue)
 // Take all available items (non-blocking)
 const items = yield* Queue.takeAll(queue)
 
+// Take one without blocking — Option
+const maybe = yield* Queue.poll(queue)
+
 // Check size
 const size = yield* Queue.size(queue)
+
+// Signal graceful completion (Cause.Done) to consumers
+yield* Queue.end(queue)
 
 // Shutdown — interrupts all waiting fibers
 yield* Queue.shutdown(queue)
 ```
+
+v3's `Queue.takeUpTo` was removed — call `Queue.poll` repeatedly up to the limit, or
+`Queue.clear` when draining everything is acceptable. `Queue.end` is the v4 way to signal
+graceful completion, using the new `Cause.Done` signal.
 
 ## PubSub
 
 PubSub provides broadcast communication — every subscriber receives every message.
 
 ```typescript
-import { Effect, PubSub, Queue } from "effect"
+import { Effect, PubSub } from "effect"
 
 const program = Effect.gen(function* () {
     const pubsub = yield* PubSub.bounded<Event>(256)
 
-    // Subscribe returns a Queue scoped to the subscriber
+    // Subscribe returns a scoped Subscription — requires a Scope
     const sub1 = yield* PubSub.subscribe(pubsub)
     const sub2 = yield* PubSub.subscribe(pubsub)
 
@@ -196,31 +239,35 @@ const program = Effect.gen(function* () {
     yield* PubSub.publish(pubsub, { type: "user_created", userId: "123" })
 
     // Each subscriber receives the message independently
-    const event1 = yield* Queue.take(sub1)
-    const event2 = yield* Queue.take(sub2)
+    const event1 = yield* PubSub.take(sub1)
+    const event2 = yield* PubSub.take(sub2)
     // event1 === event2
-})
+}).pipe(Effect.scoped)
 ```
+
+In v4 `PubSub.subscribe` returns a `Subscription`, not a `Queue` — read it with `PubSub.take` /
+`PubSub.takeAll`. The subscription is scoped, so the program needs a `Scope`.
 
 ### PubSub Variants
 
 | Variant | Behavior When Full |
 |---------|-------------------|
 | `PubSub.bounded(n)` | Suspends publisher until subscribers catch up |
-| `PubSub.unbounded` | Never blocks publisher |
+| `PubSub.unbounded()` | Never blocks publisher |
 | `PubSub.sliding(n)` | Drops oldest messages per subscriber |
 | `PubSub.dropping(n)` | Drops newest messages per subscriber |
 
 ## Semaphore
 
-**Use `Effect.makeSemaphore`** to limit concurrent access to a shared resource:
+Semaphore moved to its own module in v4 — **use `Semaphore.make`** (v3: `Effect.makeSemaphore`)
+to limit concurrent access to a shared resource:
 
 ```typescript
-import { Effect } from "effect"
+import { Effect, Semaphore } from "effect"
 
 const program = Effect.gen(function* () {
     // Allow max 3 concurrent database connections
-    const semaphore = yield* Effect.makeSemaphore(3)
+    const semaphore = yield* Semaphore.make(3)
 
     const queryWithLimit = (sql: string) =>
         semaphore.withPermits(1)(
@@ -240,7 +287,12 @@ const program = Effect.gen(function* () {
 ```typescript
 // Heavy operation requires 2 permits
 const heavyQuery = semaphore.withPermits(2)(expensiveOperation)
+
+// Non-blocking variant — skips when no permit is free
+const opportunistic = semaphore.withPermitsIfAvailable(1)(optionalWork)
 ```
+
+For per-key limiting (e.g. one permit per tenant), v4 adds `PartitionedSemaphore`.
 
 ## Deferred & Latch
 
@@ -249,13 +301,13 @@ const heavyQuery = semaphore.withPermits(2)(expensiveOperation)
 `Deferred` is a one-shot value that can be set exactly once. Multiple fibers can wait for it.
 
 ```typescript
-import { Deferred, Effect } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
 
 const program = Effect.gen(function* () {
     const ready = yield* Deferred.make<void>()
 
     // Worker waits until signaled
-    const worker = yield* Effect.fork(
+    const worker = yield* Effect.forkChild(
         Effect.gen(function* () {
             yield* Deferred.await(ready)
             yield* doWork()
@@ -269,6 +321,9 @@ const program = Effect.gen(function* () {
     yield* Fiber.join(worker)
 })
 ```
+
+**`Deferred` is not an `Effect` in v4.** `yield* deferred` compiled in v3 and awaited the value;
+now you must call `Deferred.await(deferred)` explicitly.
 
 ### Deferred Operations
 
@@ -291,7 +346,7 @@ const value = yield* Deferred.await(deferred)
 `Latch` is a gate that starts closed and can be opened to release all waiters:
 
 ```typescript
-import { Effect, Latch } from "effect"
+import { Effect, Fiber, Latch } from "effect"
 
 const program = Effect.gen(function* () {
     const gate = yield* Latch.make()
@@ -299,9 +354,9 @@ const program = Effect.gen(function* () {
     // Workers wait at the gate
     const workers = yield* Effect.all(
         Array.from({ length: 5 }, () =>
-            Effect.fork(
+            Effect.forkChild(
                 Effect.gen(function* () {
-                    yield* Latch.await(gate)
+                    yield* gate.await
                     yield* processItem()
                 }),
             ),
@@ -314,6 +369,10 @@ const program = Effect.gen(function* () {
     yield* Effect.all(workers.map(Fiber.join))
 })
 ```
+
+`await` is a property on the latch (`gate.await`), while `open` / `close` / `release` are
+available both as methods and as module functions. `Latch.whenOpen(effect)` runs an effect only
+once the gate is open.
 
 ## Shared State with Ref
 
@@ -346,7 +405,7 @@ const program = Effect.gen(function* () {
 // Create
 const ref = yield* Ref.make(initialValue)
 
-// Read
+// Read — Ref is NOT an Effect in v4, so Ref.get is mandatory
 const value = yield* Ref.get(ref)
 
 // Replace
@@ -364,6 +423,8 @@ const result = yield* Ref.modify(ref, (current) => [
     newState(current),      // new state
 ])
 ```
+
+`yield* ref` read the value in v3 because `Ref` extended `Effect`. In v4 that is a type error.
 
 ## Race & Timeout
 
@@ -384,19 +445,22 @@ const data = yield* Effect.race(
 ```typescript
 import { Duration, Effect } from "effect"
 
-// Returns Option — None if timed out
+// Fails with TimeoutError if the duration elapses
 const result = yield* longOperation.pipe(
     Effect.timeout(Duration.seconds(5)),
 )
 
-// Fail with specific error on timeout
+// Fail with a specific error on timeout (v3: Effect.timeoutFail)
 const result = yield* longOperation.pipe(
-    Effect.timeoutFail({
+    Effect.timeoutOrElse({
         duration: Duration.seconds(5),
-        onTimeout: () => new TimeoutError({ message: "Operation timed out" }),
+        onTimeout: () => Effect.fail(new OperationTimedOut({ message: "Operation timed out" })),
     }),
 )
 ```
+
+v4 renames: `Effect.timeoutFail` → `Effect.timeoutOrElse` (the fallback is an Effect, so wrap
+your error in `Effect.fail`), and the built-in `TimeoutException` → `TimeoutError`.
 
 > See also: `anti-patterns.md` — [Manual Retry/Timeout Logic]
 
@@ -404,7 +468,7 @@ const result = yield* longOperation.pipe(
 
 ### NodeRuntime.runMain
 
-**Use `NodeRuntime.runMain`** as the entry point for Node.js applications. It handles SIGINT/SIGTERM and runs all finalizers:
+**Use `NodeRuntime.runMain`** as the entry point for Node.js applications:
 
 ```typescript
 import { NodeRuntime } from "@effect/platform-node"
@@ -419,6 +483,11 @@ const program = Effect.gen(function* () {
 
 NodeRuntime.runMain(program.pipe(Effect.scoped))
 ```
+
+**v4 note:** keep-alive is now built into the core runtime — a fiber suspended on
+`Deferred.await` no longer lets the process exit, so `runMain` is not required just to hold the
+process open. It remains the recommended entry point for **signal handling** (SIGINT/SIGTERM
+interrupt the root fiber), **exit codes**, and **error reporting**. See `v4-semantics.md`.
 
 ### Effect.addFinalizer
 
@@ -458,19 +527,19 @@ const pollStatus = Effect.repeat(
     Schedule.spaced(Duration.seconds(5)),
 )
 
-// Exponential backoff polling
+// Exponential backoff, capped at 30s — v3's Schedule.union is Schedule.min
 const pollWithBackoff = Effect.repeat(
     checkStatus,
     Schedule.exponential(Duration.seconds(1)).pipe(
-        Schedule.union(Schedule.spaced(Duration.seconds(30))), // cap at 30s
+        Schedule.min(Schedule.spaced(Duration.seconds(30))),
     ),
 )
 
-// Poll until condition met
+// Poll until condition met — v3's whileOutput / whileInput are both Schedule.while
 const waitForReady = Effect.repeat(
     checkStatus,
     Schedule.spaced(Duration.seconds(1)).pipe(
-        Schedule.whileOutput((status) => status !== "ready"),
+        Schedule.while((meta) => meta.output !== "ready"),
     ),
 )
 
@@ -481,6 +550,9 @@ const fixedPoll = Effect.repeat(
 )
 ```
 
+`Schedule.while` receives a metadata object — read `meta.input` for the effect's value (v3's
+`whileInput`) or `meta.output` for the schedule's output (v3's `whileOutput`).
+
 ### Schedule Comparison
 
 | Schedule | Behavior |
@@ -489,29 +561,34 @@ const fixedPoll = Effect.repeat(
 | `Schedule.fixed(d)` | Run at fixed intervals (accounts for execution time) |
 | `Schedule.exponential(d)` | Double the delay each time: `d`, `2d`, `4d`, `8d`... |
 | `Schedule.recurs(n)` | Repeat at most `n` times |
+| `Schedule.min(a, b)` | Fastest-delay composition (v3: `union`) |
+| `Schedule.max(a, b)` | Slowest-delay composition (v3: `intersect`) |
+
+`Schedule.compose` has no direct v4 equivalent — rebuild it with `Schedule.fromStep` /
+`Schedule.toStep` if you genuinely need it.
 
 ## Quick Reference Table
 
 | Primitive | Import | Create | Use Case |
 |-----------|--------|--------|----------|
-| `Effect.fork` | `Effect` | `Effect.fork(effect)` | Background task |
-| `Effect.forkDaemon` | `Effect` | `Effect.forkDaemon(effect)` | App-lifetime background task |
-| `Effect.forkScoped` | `Effect` | `Effect.forkScoped(effect)` | Scope-lifetime background task |
+| `Effect.forkChild` | `Effect` | `Effect.forkChild(effect, opts?)` | Background task (v3: `fork`) |
+| `Effect.forkDetach` | `Effect` | `Effect.forkDetach(effect, opts?)` | App-lifetime task (v3: `forkDaemon`) |
+| `Effect.forkScoped` | `Effect` | `Effect.forkScoped(effect, opts?)` | Scope-lifetime background task |
 | `Fiber.join` | `Fiber` | `Fiber.join(fiber)` | Wait for fiber result |
 | `Fiber.interrupt` | `Fiber` | `Fiber.interrupt(fiber)` | Stop fiber gracefully |
 | `Effect.all` | `Effect` | `Effect.all(effects, { concurrency })` | Parallel execution |
 | `Effect.forEach` | `Effect` | `Effect.forEach(items, fn, { concurrency })` | Parallel iteration |
 | `Queue.bounded` | `Queue` | `Queue.bounded<A>(n)` | Point-to-point with backpressure |
-| `Queue.unbounded` | `Queue` | `Queue.unbounded<A>` | Point-to-point, no limit |
+| `Queue.unbounded` | `Queue` | `Queue.unbounded<A>()` | Point-to-point, no limit |
 | `Queue.sliding` | `Queue` | `Queue.sliding<A>(n)` | Drop oldest when full |
 | `Queue.dropping` | `Queue` | `Queue.dropping<A>(n)` | Drop newest when full |
 | `PubSub.bounded` | `PubSub` | `PubSub.bounded<A>(n)` | Broadcast with backpressure |
-| `PubSub.unbounded` | `PubSub` | `PubSub.unbounded<A>` | Broadcast, no limit |
-| `Effect.makeSemaphore` | `Effect` | `Effect.makeSemaphore(n)` | Limit concurrent access |
+| `Semaphore.make` | `Semaphore` | `Semaphore.make(n)` | Limit concurrent access (v3: `Effect.makeSemaphore`) |
+| `PartitionedSemaphore` | `PartitionedSemaphore` | — | Per-key concurrency limiting (new in v4) |
 | `Deferred.make` | `Deferred` | `Deferred.make<A>()` | One-time signal |
 | `Latch.make` | `Latch` | `Latch.make()` | Open/close gate |
 | `Ref.make` | `Ref` | `Ref.make(initial)` | Atomic shared state |
 | `Effect.race` | `Effect` | `Effect.race(a, b)` | First to complete wins |
-| `Effect.timeout` | `Effect` | `Effect.timeout(d)` | Timeout with Option |
-| `Effect.timeoutFail` | `Effect` | `Effect.timeoutFail({ duration, onTimeout })` | Timeout with error |
+| `Effect.timeout` | `Effect` | `Effect.timeout(d)` | Fail with `TimeoutError` |
+| `Effect.timeoutOrElse` | `Effect` | `Effect.timeoutOrElse({ duration, onTimeout })` | Timeout with fallback (v3: `timeoutFail`) |
 | `Effect.repeat` | `Effect` | `Effect.repeat(effect, schedule)` | Polling / repeated execution |

@@ -226,9 +226,12 @@ await Effect.runPromise(Effect.succeed(42))
 
 ```typescript
 // ERROR: UserService is required but not provided
-const program = UserService.findById(id)
-// FIX: Add to Layer composition
-const MainLive = Layer.provide(program, UserService.Default)
+const program = Effect.gen(function* () {
+  const users = yield* UserService
+  return yield* users.findById(id)
+})
+// FIX: Provide the service's layer
+const main = program.pipe(Effect.provide(UserService.layer))
 ```
 
 ### Yield Non-Effect
@@ -240,6 +243,10 @@ yield* Promise.resolve(42)
 // FIX: Wrap in Effect.promise
 yield* Effect.promise(() => Promise.resolve(42))
 ```
+
+In v4 this diagnostic also catches `yield* ref`, `yield* deferred`, and `yield* fiber` — those
+types are no longer `Effect` subtypes. Use `Ref.get`, `Deferred.await`, and `Fiber.join`. See
+`v4-semantics.md`.
 
 ### Forbidden Tags
 

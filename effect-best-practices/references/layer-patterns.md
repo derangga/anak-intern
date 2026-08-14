@@ -1,21 +1,19 @@
 # Layer Patterns
 
-## Dependencies in Effect.Service
+> Effect v4. There is no auto-generated `Default` layer — every service declares its own
+> `static readonly layer`. See `service-patterns.md` for the service definition itself.
 
-**Critical rule:** Always declare dependencies in the `dependencies` array of `Effect.Service`. This ensures proper composition and avoids "leaked dependencies" that require manual wiring at usage sites.
+## Dependencies Belong in the Layer
+
+**Critical rule:** a service's `static layer` must provide everything its `make` requires. A
+fully-wired layer has `never` in its third type parameter; anything else is a leaked dependency
+that every usage site has to patch.
 
 ### Correct Pattern
 
 ```typescript
-export class OrderService extends Effect.Service<OrderService>()("OrderService", {
-    accessors: true,
-    dependencies: [
-        UserService.Default,
-        ProductService.Default,
-        InventoryService.Default,
-        PaymentService.Default,
-    ],
-    effect: Effect.gen(function* () {
+export class OrderService extends Context.Service<OrderService>()("OrderService", {
+    make: Effect.gen(function* () {
         const users = yield* UserService
         const products = yield* ProductService
         const inventory = yield* InventoryService
@@ -24,46 +22,68 @@ export class OrderService extends Effect.Service<OrderService>()("OrderService",
         // Service implementation...
         return { /* methods */ }
     }),
-}) {}
+}) {
+    static readonly layer = Layer.effect(this, this.make).pipe(
+        Layer.provide([
+            UserService.layer,
+            ProductService.layer,
+            InventoryService.layer,
+            PaymentService.layer,
+        ]),
+    )
+    //  ^? Layer<OrderService, E, never> — fully wired
+}
 
 // At app root - simple, flat composition
 const AppLive = Layer.mergeAll(
-    OrderService.Default,
+    OrderService.layer,
     // Other top-level services
-    NotificationService.Default,
-    AnalyticsService.Default,
+    NotificationService.layer,
+    AnalyticsService.layer,
 )
 ```
+
+`Layer.provide` accepts an array, so one call satisfies all four dependencies. Reach for it
+instead of chaining four separate `Layer.provide` calls.
 
 ### Wrong Pattern (Leaked Dependencies)
 
 > See also: `anti-patterns.md` — [Prop-Drilling Dependencies Through Function Arguments] for the broader anti-pattern
 
 ```typescript
-// WRONG - Dependencies not declared
-export class OrderService extends Effect.Service<OrderService>()("OrderService", {
-    accessors: true,
-    effect: Effect.gen(function* () {
-        const users = yield* UserService // Not in dependencies!
+// WRONG - layer doesn't satisfy what make requires
+export class OrderService extends Context.Service<OrderService>()("OrderService", {
+    make: Effect.gen(function* () {
+        const users = yield* UserService // requirement escapes
         // ...
     }),
-}) {}
+}) {
+    static readonly layer = Layer.effect(this, this.make)
+    //  ^? Layer<OrderService, never, UserService | ProductService>
+}
 
 // Now every usage requires manual wiring
-const program = OrderService.create(input).pipe(
+const program = Effect.gen(function* () {
+    const orders = yield* OrderService
+    return yield* orders.create(input)
+}).pipe(
     Effect.provide(
-        OrderService.Default.pipe(
-            Layer.provide(UserService.Default),
-            Layer.provide(ProductService.Default),
-            // Easy to forget one, causes runtime errors
+        OrderService.layer.pipe(
+            Layer.provide(UserService.layer),
+            Layer.provide(ProductService.layer),
+            // Easy to forget one — now a type error rather than a runtime surprise
         )
     ),
 )
 ```
 
+The upside in v4: because the requirement is visible in the layer's type, forgetting one is a
+compile error at the definition site rather than a mystery at the app root.
+
 ## Infrastructure Layers
 
-Infrastructure layers (Database, Redis, HTTP clients) are **acceptable** to leave as "leaked" dependencies because:
+Infrastructure layers (Database, Redis, HTTP clients) are **acceptable** to leave as "leaked"
+dependencies because:
 
 1. They're provided once at the application root
 2. They don't change between test/production (different implementations, same interface)
@@ -73,19 +93,18 @@ Infrastructure layers (Database, Redis, HTTP clients) are **acceptable** to leav
 // Infrastructure can be provided at app root
 import { PgClient } from "@effect/sql-pg"
 
-const DatabaseLive = PgClient.layer({
+// Config-driven: layerConfig, not layer (v4 split these)
+const DatabaseLive = PgClient.layerConfig({
     host: Config.string("DB_HOST"),
-    port: Config.integer("DB_PORT"),
+    port: Config.int("DB_PORT"),
     database: Config.string("DB_NAME"),
     username: Config.string("DB_USER"),
     password: Config.redacted("DB_PASSWORD"),
 })
 
-// Services use database but don't declare it in dependencies
-export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
-    accessors: true,
-    // No dependencies array - PgClient provided at app root
-    effect: Effect.gen(function* () {
+// Services use the database but don't provide it in their own layer
+export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
+    make: Effect.gen(function* () {
         const sql = yield* PgClient.PgClient
 
         const findById = Effect.fn("UserRepo.findById")(function* (id: UserId) {
@@ -95,12 +114,15 @@ export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
 
         return { findById }
     }),
-}) {}
+}) {
+    // Deliberately leaves PgClient in the requirements — provided at app root
+    static readonly layer = Layer.effect(this, this.make)
+}
 
 // App root provides infrastructure once
 const AppLive = Layer.mergeAll(
-    OrderService.Default,
-    UserService.Default,
+    OrderService.layer,
+    UserService.layer,
 ).pipe(
     Layer.provide(DatabaseLive), // Infrastructure provided here
     Layer.provide(RedisLive),
@@ -114,10 +136,10 @@ const AppLive = Layer.mergeAll(
 ```typescript
 // CORRECT - Flat composition
 const ServicesLive = Layer.mergeAll(
-    UserService.Default,
-    OrderService.Default,
-    ProductService.Default,
-    NotificationService.Default,
+    UserService.layer,
+    OrderService.layer,
+    ProductService.layer,
+    NotificationService.layer,
 )
 
 const InfrastructureLive = Layer.mergeAll(
@@ -133,11 +155,11 @@ const AppLive = ServicesLive.pipe(
 
 ```typescript
 // WRONG - Deeply nested, hard to read
-const AppLive = UserService.Default.pipe(
+const AppLive = UserService.layer.pipe(
     Layer.provide(
-        OrderService.Default.pipe(
+        OrderService.layer.pipe(
             Layer.provide(
-                ProductService.Default.pipe(
+                ProductService.layer.pipe(
                     Layer.provide(DatabaseLive),
                 ),
             ),
@@ -148,12 +170,14 @@ const AppLive = UserService.Default.pipe(
 
 ## Layer.provideMerge for Sequential Composition
 
-**Use `Layer.provideMerge`** when chaining layers that need incremental composition. Unlike `Layer.provide`, `provideMerge` merges the output into the current layer, producing flatter types.
+**Use `Layer.provideMerge`** when chaining layers that need incremental composition. Unlike
+`Layer.provide`, `provideMerge` merges the output into the current layer, producing flatter
+types.
 
 ```typescript
 // CORRECT - Layer.provideMerge chains for incremental composition
 const MainLive = DatabaseLive.pipe(
-    Layer.provideMerge(ProxyConfigService.Default),
+    Layer.provideMerge(ProxyConfigService.layer),
     Layer.provideMerge(LoggerLive),
     Layer.provideMerge(CacheLive),
     Layer.provideMerge(TracerLive),
@@ -161,51 +185,81 @@ const MainLive = DatabaseLive.pipe(
 
 // WRONG - Multiple Layer.provide calls create nested types
 const MainLive = DatabaseLive.pipe(
-    Layer.provide(ProxyConfigService.Default),
+    Layer.provide(ProxyConfigService.layer),
     Layer.provide(LoggerLive),  // Each provide creates deeper nesting
     Layer.provide(CacheLive),
 )
 ```
 
-**Key difference:** `Layer.provide(A, B)` provides B to A but outputs only A's services. `Layer.provideMerge(A, B)` provides B to A and outputs both A's and B's services merged together.
+**Key difference:** `Layer.provide(A, B)` provides B to A but outputs only A's services.
+`Layer.provideMerge(A, B)` provides B to A and outputs both A's and B's services merged
+together.
 
-## Layer Deduplication Benefits
+## Layer Memoization
 
-Layers automatically memoize construction - the same service is instantiated only once regardless of how many times it appears in the dependency graph.
+Layers memoize construction — the same service is instantiated only once regardless of how many
+times it appears in the dependency graph.
 
 ```typescript
 // Both UserRepo and OrderRepo depend on DatabaseLive
 const RepoLive = Layer.mergeAll(
-    UserRepo.Default,   // requires DatabaseLive
-    OrderRepo.Default,  // requires DatabaseLive
+    UserRepo.layer,   // requires DatabaseLive
+    OrderRepo.layer,  // requires DatabaseLive
 )
 
-// With Layer.mergeAll, DatabaseLive is constructed ONCE
+// DatabaseLive is constructed ONCE
 const AppLive = RepoLive.pipe(
     Layer.provide(DatabaseLive), // Single instance shared
 )
 ```
 
-**`Effect.provide` does NOT deduplicate:**
+### v4 change: memoization is shared across `Effect.provide` calls
+
+In v3, each `Effect.provide` call had its **own** memo map, so two provide calls with
+overlapping layers silently built those layers twice — a classic source of duplicate database
+pools. In v4 the `MemoMap` is shared across provide calls on the same fiber, so this now builds
+one instance:
 
 ```typescript
-// WRONG - Each provide creates a new instance
+// v3: DatabaseLive built TWICE. v4: built ONCE.
 const program = myEffect.pipe(
-    Effect.provide(UserRepo.Default),
-    Effect.provide(OrderRepo.Default),
-    // If both repos need DatabaseLive, and you provide it separately,
-    // you may get TWO database connections!
-)
-
-// CORRECT - Use layers for deduplication
-const program = myEffect.pipe(
-    Effect.provide(AppLive), // Single composed layer
+    Effect.provide(UserRepo.layer),
+    Effect.provide(OrderRepo.layer),
 )
 ```
 
+**This is a safety net, not a license.** Compose layers before providing — it keeps the whole
+dependency graph visible in one place:
+
+```typescript
+// PREFERRED - one composed layer, one provide
+const program = myEffect.pipe(Effect.provide(AppLive))
+```
+
+### Opting out: fresh instances on purpose
+
+Sometimes you *want* a separate instance — test isolation, independent connection pools:
+
+```typescript
+// Layer.fresh - this layer bypasses the shared memo map
+const program = myEffect.pipe(
+    Effect.provide(DatabaseLive),
+    Effect.provide(Layer.fresh(DatabaseLive)), // built again, separately
+)
+
+// { local: true } - new in v4, isolates an entire layer subtree
+const program = myEffect.pipe(
+    Effect.provide(AppLive),
+    Effect.provide(TestHarnessLive, { local: true }), // own memo map
+)
+```
+
+Use `{ local: true }` when a whole subtree must be independent, e.g. per-test resources.
+
 ## TypeScript LSP Performance
 
-Deeply nested `Layer.provide` chains create complex recursive types that slow down the TypeScript Language Server.
+Deeply nested `Layer.provide` chains create complex recursive types that slow down the
+TypeScript Language Server.
 
 ```typescript
 // PROBLEMATIC - Deep nesting causes slow LSP
@@ -232,16 +286,18 @@ const AppLive = Layer.mergeAll(Layer1, Layer2).pipe(
 
 **Recommendations:**
 - Prefer `Layer.mergeAll` for layers at the same level
-- Use `Layer.provideMerge` instead of chained `Layer.provide` calls
+- Pass an array to a single `Layer.provide` rather than chaining calls
+- Use `Layer.provideMerge` when you need the provided services in the output
 - Group related layers into intermediate compositions
 - Keep nesting depth shallow (ideally 2-3 levels max)
 
 ## layerConfig Pattern
 
-For services that need configuration at construction time, use the `layerConfig` static method pattern:
+For services that need configuration at construction time, add a `layerConfig` static
+alongside `layer`:
 
 ```typescript
-import { Config, ConfigError, Effect, Layer } from "effect"
+import { Config, Context, Effect, Layer } from "effect"
 
 interface EventQueueConfig {
     readonly maxRetries: number
@@ -249,21 +305,22 @@ interface EventQueueConfig {
     readonly pollInterval: number
 }
 
-export class ElectricEventQueue extends Effect.Service<ElectricEventQueue>()(
+export class ElectricEventQueue extends Context.Service<ElectricEventQueue>()(
     "ElectricEventQueue",
     {
-        accessors: true,
-        effect: Effect.gen(function* () {
+        make: Effect.gen(function* () {
             // Default implementation
             return { /* methods */ }
         }),
     }
 ) {
-    // Static method for config-driven layer
+    static readonly layer = Layer.effect(this, this.make)
+
+    // Config-driven variant
     static readonly layerConfig = (
-        config: Config.Config.Wrap<EventQueueConfig>,
-    ): Layer.Layer<ElectricEventQueue, ConfigError.ConfigError> =>
-        Layer.unwrapEffect(
+        config: Config.Wrap<EventQueueConfig>,
+    ): Layer.Layer<ElectricEventQueue, Config.ConfigError> =>
+        Layer.unwrap(
             Config.unwrap(config).pipe(
                 Effect.map((cfg) =>
                     Layer.succeed(
@@ -277,17 +334,21 @@ export class ElectricEventQueue extends Effect.Service<ElectricEventQueue>()(
 
 // Usage
 const EventQueueLive = ElectricEventQueue.layerConfig({
-    maxRetries: Config.integer("EVENT_QUEUE_MAX_RETRIES").pipe(
+    maxRetries: Config.int("EVENT_QUEUE_MAX_RETRIES").pipe(
         Config.withDefault(3)
     ),
-    batchSize: Config.integer("EVENT_QUEUE_BATCH_SIZE").pipe(
+    batchSize: Config.int("EVENT_QUEUE_BATCH_SIZE").pipe(
         Config.withDefault(100)
     ),
-    pollInterval: Config.integer("EVENT_QUEUE_POLL_INTERVAL").pipe(
+    pollInterval: Config.int("EVENT_QUEUE_POLL_INTERVAL").pipe(
         Config.withDefault(1000)
     ),
 })
 ```
+
+v4 details in that example: the wrapper type is `Config.Wrap<T>` (not `Config.Config.Wrap`),
+the error is `Config.ConfigError` (the `ConfigError` module is gone), `Config.integer` is now
+`Config.int`, and `Layer.unwrapEffect` is now `Layer.unwrap`.
 
 This pattern:
 - Separates configuration from implementation
@@ -297,17 +358,20 @@ This pattern:
 
 ## Layer Naming Conventions
 
-Use suffixes to indicate layer type:
+v4 standardizes on `layer` as the primary layer name. Use descriptive suffixes for variants
+rather than v3's `Live` / `Default` convention:
 
-- `ServiceLive` - Production implementation
-- `ServiceTest` - Test/mock implementation
-- `ServiceLayer` - Generic layer (rare)
+| Name | Purpose |
+| --- | --- |
+| `Service.layer` | production implementation |
+| `Service.layerConfig` | built from `Config` values |
+| `Service.layerTest` | test / mock implementation |
+
+Standalone infrastructure layers that aren't attached to a service class may still use a
+`Live` suffix (`DatabaseLive`, `RedisLive`) — there is no class to hang a static on.
 
 ```typescript
-// Production
-export const UserServiceLive = UserService.Default
-
-// Test with mocks
+// Test with a static double
 export const UserServiceTest = Layer.succeed(
     UserService,
     UserService.of({
@@ -316,41 +380,54 @@ export const UserServiceTest = Layer.succeed(
     })
 )
 
-// Test with in-memory state
-export class UserServiceInMemory extends Effect.Service<UserService>()("UserService", {
-    accessors: true,
-    effect: Effect.gen(function* () {
-        const store = new Map<string, User>()
+// Test with in-memory state — a second layer on the SAME class,
+// so production code yielding UserService gets the mock
+export class UserService extends Context.Service<UserService>()("UserService", {
+    make: Effect.gen(function* () { /* real implementation */ }),
+}) {
+    static readonly layer = Layer.effect(this, this.make)
 
-        return {
-            findById: Effect.fn("UserService.findById")(function* (id) {
-                const user = store.get(id)
-                if (!user) return yield* Effect.fail(new UserNotFoundError({ userId: id }))
-                return user
-            }),
-            create: Effect.fn("UserService.create")(function* (input) {
-                const user = { id: UserId.make(crypto.randomUUID()), ...input }
-                store.set(user.id, user)
-                return user
-            }),
-        }
-    }),
-}) {}
+    static readonly layerTest = Layer.effect(
+        this,
+        Effect.gen(function* () {
+            const store = new Map<string, User>()
+
+            return {
+                findById: Effect.fn("UserService.findById")(function* (id) {
+                    const user = store.get(id)
+                    if (!user) return yield* Effect.fail(new UserNotFoundError({ userId: id }))
+                    return user
+                }),
+                create: Effect.fn("UserService.create")(function* (input) {
+                    const user = { id: UserId.make(crypto.randomUUID()), ...input }
+                    store.set(user.id, user)
+                    return user
+                }),
+            }
+        }),
+    )
+}
 ```
 
-## Layer.unwrapEffect for Config-Dependent Layers
+A *separate* mock class also works — context lookup is by the identifier **string**, so
+`class UserServiceInMemory extends Context.Service<UserService>()("UserService", ...)` occupies
+the same slot. But that match is an unchecked convention: a typo in the string silently yields a
+different service and the failure shows up as a missing-requirement error somewhere else.
+`static layerTest` on the real class can't drift.
 
-When a layer needs async configuration:
+## Layer.unwrap for Config-Dependent Layers
+
+When a layer's construction depends on an effect:
 
 ```typescript
 import { Config, Effect, Layer } from "effect"
 
 // Layer that depends on config
-const ApiClientLive = Layer.unwrapEffect(
+const ApiClientLive = Layer.unwrap(
     Effect.gen(function* () {
         const apiKey = yield* Config.string("API_KEY")
         const baseUrl = yield* Config.string("API_BASE_URL")
-        const timeout = yield* Config.integer("API_TIMEOUT").pipe(
+        const timeout = yield* Config.int("API_TIMEOUT").pipe(
             Config.withDefault(5000)
         )
 
@@ -362,17 +439,17 @@ const ApiClientLive = Layer.unwrapEffect(
 )
 
 // Layer that validates config
-const ValidatedConfigLive = Layer.unwrapEffect(
+const ValidatedConfigLive = Layer.unwrap(
     Effect.gen(function* () {
         const config = yield* Config.all({
             dbUrl: Config.string("DATABASE_URL"),
             redisUrl: Config.string("REDIS_URL"),
-            port: Config.integer("PORT"),
+            port: Config.int("PORT"),
         })
 
         // Validate config
         if (!config.dbUrl.startsWith("postgresql://")) {
-            return yield* Effect.fail(new ConfigError({ message: "Invalid DATABASE_URL" }))
+            return yield* Effect.fail(new Config.ConfigError({ message: "Invalid DATABASE_URL" }))
         }
 
         return Layer.succeed(AppConfig, config)
@@ -380,15 +457,19 @@ const ValidatedConfigLive = Layer.unwrapEffect(
 )
 ```
 
+For validation attached to the config itself rather than a wrapper layer, prefer
+`Config.schema(schema.check(...), path)` — v4 moved `Config.validate` into Schema checks.
+
 ## Scoped Layers
 
-For resources that need cleanup:
+`Layer.scoped` is gone in v4 — scoped acquisition merged into `Layer.effect`, which supplies
+the layer's `Scope` and excludes it from the requirements:
 
 ```typescript
-import { Effect, Layer, Scope } from "effect"
+import { Context, Effect, Layer } from "effect"
 
-// Resource that needs cleanup
-const DatabaseConnectionLive = Layer.scoped(
+// Resource that needs cleanup — Layer.effect handles the Scope
+const DatabaseConnectionLive = Layer.effect(
     DatabaseConnection,
     Effect.acquireRelease(
         Effect.gen(function* () {
@@ -405,9 +486,8 @@ const DatabaseConnectionLive = Layer.scoped(
 )
 
 // Service using scoped resource
-export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
-    accessors: true,
-    effect: Effect.gen(function* () {
+export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
+    make: Effect.gen(function* () {
         const db = yield* DatabaseConnection
 
         return {
@@ -416,7 +496,11 @@ export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
             }),
         }
     }),
-}) {}
+}) {
+    static readonly layer = Layer.effect(this, this.make).pipe(
+        Layer.provide(DatabaseConnectionLive),
+    )
+}
 ```
 
 ## Testing Layer Composition
@@ -426,31 +510,33 @@ export class UserRepo extends Effect.Service<UserRepo>()("UserRepo", {
 import { Layer } from "effect"
 
 export const TestLive = Layer.mergeAll(
-    UserServiceTest,
-    OrderServiceTest,
-    ProductServiceTest,
+    UserService.layerTest,
+    OrderService.layerTest,
+    ProductService.layerTest,
 ).pipe(
     Layer.provide(InMemoryDatabaseLive),
 )
 
 // test/user.test.ts
+import { assert, describe, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { TestLive } from "./setup"
 
 describe("UserService", () => {
-    it("creates users", async () => {
-        const program = Effect.gen(function* () {
-            const user = yield* UserService.create({
+    it.effect("creates users", () =>
+        Effect.gen(function* () {
+            const users = yield* UserService
+            const user = yield* users.create({
                 email: "test@example.com",
                 name: "Test User",
             })
-            expect(user.email).toBe("test@example.com")
-        })
-
-        await Effect.runPromise(program.pipe(Effect.provide(TestLive)))
-    })
+            assert.strictEqual(user.email, "test@example.com")
+        }).pipe(Effect.provide(TestLive))
+    )
 })
 ```
+
+See `testing-patterns.md` for the full test setup.
 
 ## Layer.effect vs Layer.succeed
 
@@ -461,7 +547,7 @@ const ConfigLive = Layer.succeed(AppConfig, {
     env: "development",
 })
 
-// Layer.effect - when construction needs effects
+// Layer.effect - when construction needs effects (including scoped acquisition)
 const LoggerLive = Layer.effect(
     Logger,
     Effect.gen(function* () {
@@ -474,12 +560,12 @@ const LoggerLive = Layer.effect(
 )
 ```
 
-## Lazy Layers
+## Deferred Layer Construction
 
-For expensive initialization that should be deferred:
+For expensive initialization that should be deferred, use `Layer.suspend` (v3's `Layer.lazy`):
 
 ```typescript
-const ExpensiveServiceLive = Layer.lazy(() => {
+const ExpensiveServiceLive = Layer.suspend(() => {
     // This code runs only when the layer is first used
     return Layer.effect(
         ExpensiveService,

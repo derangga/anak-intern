@@ -2,19 +2,37 @@
 
 Effect Atom is a reactive state management library that integrates with Effect-TS. It provides atoms (reactive containers), automatic dependency tracking, and seamless React integration.
 
+> **Effect v4 changes.** The React package is **`@effect/atom-react`** (v3: `@effect-atom/atom-react`),
+> and it no longer re-exports the core modules — `Atom` and `AsyncResult` are imported from
+> **`effect/unstable/reactivity`**. v3's `Result` is now `AsyncResult`, and the chainable
+> `Result.builder` has been **removed**.
+
 ## Core Concepts
 
 - **Atoms**: Reactive state containers with automatic dependency tracking
-- **Result**: Handles async/effectful computations with initial, success, and failure states
+- **AsyncResult**: Handles async/effectful computations with initial, success, and failure states
 - **Finalizers**: Built-in cleanup for resources and event listeners
 - **Families**: Dynamic atom creation for per-entity state
+
+## Imports at a Glance
+
+```typescript
+// Core atom + result modules — from effect
+import { Atom, AsyncResult } from "effect/unstable/reactivity"
+
+// React bindings — from the framework package
+import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
+```
+
+Sibling packages `@effect/atom-solid` and `@effect/atom-vue` follow the same split. All of them
+share one version number with `effect` itself.
 
 ## Creating Atoms
 
 ### Basic Atoms
 
 ```typescript
-import { Atom } from "@effect-atom/atom-react"
+import { Atom } from "effect/unstable/reactivity"
 
 // Simple value atom
 const countAtom = Atom.make(0)
@@ -79,7 +97,7 @@ const resolvedThemeAtom = Atom.transform(themeAtom, (get) => {
 Use `Atom.family` for per-entity state:
 
 ```typescript
-import { Atom } from "@effect-atom/atom-react"
+import { Atom } from "effect/unstable/reactivity"
 
 // Create a family of atoms - one per channelId
 const replyToMessageAtomFamily = Atom.family((channelId: string) =>
@@ -115,7 +133,7 @@ const modalAtomFamily = Atom.family((type: ModalType) =>
 ### Reading Atom Values
 
 ```typescript
-import { useAtomValue } from "@effect-atom/atom-react"
+import { useAtomValue } from "@effect/atom-react"
 
 function Counter() {
     const count = useAtomValue(countAtom)
@@ -126,7 +144,7 @@ function Counter() {
 ### Updating Atom Values
 
 ```typescript
-import { useAtomSet } from "@effect-atom/atom-react"
+import { useAtomSet } from "@effect/atom-react"
 
 function IncrementButton() {
     const setCount = useAtomSet(countAtom)
@@ -141,7 +159,7 @@ function IncrementButton() {
 ### Reading and Writing Together
 
 ```typescript
-import { useAtom } from "@effect-atom/atom-react"
+import { useAtom } from "@effect/atom-react"
 
 function CounterControl() {
     const [count, setCount] = useAtom(countAtom)
@@ -159,7 +177,7 @@ function CounterControl() {
 Use `useAtomMount` to activate atoms without reading their value:
 
 ```typescript
-import { useAtomMount } from "@effect-atom/atom-react"
+import { useAtomMount } from "@effect/atom-react"
 
 function App() {
     // Activate side effects without subscribing to value
@@ -195,7 +213,7 @@ const handleSubmit = async () => {
 ```
 
 **Why this is preferred:**
-- Single source of truth — loading state lives on the Result
+- Single source of truth — loading state lives on the AsyncResult
 - No `finally` blocks or manual state resets
 - Automatically synchronized with the mutation lifecycle
 
@@ -276,12 +294,12 @@ const paywallsAtom = Atom.make(
 - After the mutation succeeds, all atoms with matching keys re-execute
 - Replaces manual patterns like calling `refreshPaywalls()` after mutations
 
-## Working with Effects and Results
+## Working with Effects and AsyncResult
 
-### Effectful Atoms Return Result
+### Effectful Atoms Return AsyncResult
 
 ```typescript
-import { Atom, Result } from "@effect-atom/atom-react"
+import { Atom, AsyncResult } from "effect/unstable/reactivity"
 import { Effect } from "effect"
 
 const userAtom = Atom.make(
@@ -289,100 +307,103 @@ const userAtom = Atom.make(
         const response = yield* fetchUser()
         return response
     })
-) // Type: Atom<Result<User, Error>>
+) // Type: Atom<AsyncResult<User, Error>>
 ```
 
-### Handling Results with Result.builder (Recommended)
+`AsyncResult` has three states — `Initial`, `Success`, `Failure` — plus a `waiting` flag that is
+orthogonal to all three (a `Success` can be `waiting: true` while it refreshes).
 
-**Use `Result.builder`** for rendering Result types. It provides a chainable API with granular error handling and type narrowing.
+### Rendering with AsyncResult.match
+
+`Result.builder` is gone in v4. Use `AsyncResult.match` for the three states:
 
 ```typescript
-import { Result, useAtomValue } from "@effect-atom/atom-react"
+import { AsyncResult } from "effect/unstable/reactivity"
+import { useAtomValue } from "@effect/atom-react"
 
 function UserProfile() {
     const userResult = useAtomValue(userAtom)
 
-    return Result.builder(userResult)
-        .onInitial(() => <div>Loading...</div>)
-        .onError((error) => <div>Error: {error.message}</div>)
-        .onSuccess((user) => <div>Hello, {user.name}!</div>)
-        .render()
+    return AsyncResult.match(userResult, {
+        onInitial: () => <div>Loading...</div>,
+        onFailure: (failure) => <div>Error: {String(failure.cause)}</div>,
+        onSuccess: (success) => <div>Hello, {success.value.name}!</div>,
+    })
 }
 ```
 
-### Result.builder with Tagged Errors
+Each handler receives the **variant**, not the bare value — so success is `success.value`.
 
-**Key advantage**: Handle specific error types with `onErrorTag`:
+### Typed Errors with AsyncResult.matchWithError
+
+`matchWithError` splits a failure into a typed error and a defect, which is what the old
+`onErrorTag` chain was for. Branch on `_tag` inside `onError`:
 
 ```typescript
 function ResourceEmbed({ url }: { url: string }) {
     const resourceResult = useAtomValue(resourceAtom)
 
-    return Result.builder(resourceResult)
-        .onInitial(() => <Skeleton />)
-        .onErrorTag("NotFoundError", (error) => (
-            <ErrorCard message={error.message} />
-        ))
-        .onErrorTag("UnauthorizedError", () => (
-            <ConnectPrompt provider="GitHub" />
-        ))
-        .onErrorTag("RateLimitError", (error) => (
-            <RetryCard retryAfter={error.retryAfter} />
-        ))
-        .onError((error) => (
-            // Fallback for any other errors
-            <ErrorCard message="Something went wrong" />
-        ))
-        .onSuccess((data) => <ResourceCard data={data} />)
-        .render()
+    return AsyncResult.matchWithError(resourceResult, {
+        onInitial: () => <Skeleton />,
+        onError: (error) => {
+            switch (error._tag) {
+                case "NotFoundError":
+                    return <ErrorCard message={error.message} />
+                case "UnauthorizedError":
+                    return <ConnectPrompt provider="GitHub" />
+                case "RateLimitError":
+                    return <RetryCard retryAfter={error.retryAfter} />
+                default:
+                    return <ErrorCard message="Something went wrong" />
+            }
+        },
+        onDefect: (defect) => <ErrorCard message="Unexpected error" />,
+        onSuccess: (success) => <ResourceCard data={success.value} />,
+    })
 }
 ```
 
-### Result.builder Methods
+A `switch` on `_tag` narrows each branch exactly as `onErrorTag` did, and the `default` case is
+the old `.onError` fallback. Unlike the builder, an unhandled state is a **compile error** rather
+than a silent `null` from `render()`.
 
-| Method | Purpose |
+### AsyncResult API
+
+| API | Purpose |
 |--------|---------|
-| `onInitial(fn)` | Handle initial/loading state |
-| `onInitialOrWaiting(fn)` | Handle both initial and waiting states |
-| `onWaiting(fn)` | Handle waiting/refetching state |
-| `onSuccess(fn)` | Handle success with value |
-| `onError(fn)` | Handle any error |
-| `onErrorTag(tag, fn)` | Handle specific tagged error (removes from type) |
-| `onErrorIf(predicate, fn)` | Handle errors matching predicate |
-| `onFailure(fn)` | Handle failure with full Cause |
-| `onDefect(fn)` | Handle unexpected defects |
-| `render()` | Return result (null if unhandled initial) |
-| `orElse(fn)` | Provide fallback value |
-| `orNull()` | Return null for unhandled cases |
+| `AsyncResult.match(r, {...})` | Exhaustive 3-case match: `onInitial` / `onFailure` / `onSuccess` |
+| `AsyncResult.matchWithError(r, {...})` | Splits failure into `onError` (typed) and `onDefect` |
+| `AsyncResult.getOrElse(r, fn)` | Extract the value, or a fallback |
+| `AsyncResult.value(r)` | `Option<A>` of the current value |
+| `AsyncResult.isInitial(r)` | Guard for the initial state |
+| `AsyncResult.isSuccess(r)` | Guard for success (narrows to `Success<A, E>`) |
+| `AsyncResult.isFailure(r)` | Guard for failure (narrows to `Failure<A, E>`) |
+| `AsyncResult.isWaiting(r)` | `true` while an async computation or refresh is in flight |
+| `result.waiting` | The same flag, read directly off any variant |
 
-### Extracting Values with orElse
+### Extracting Values with getOrElse
 
-For non-rendering use cases, extract values with `orElse`:
+For non-rendering use cases:
 
 ```typescript
 function useRepositories() {
     const reposResult = useAtomValue(repositoriesAtom)
 
     // Extract array or empty fallback
-    const repositories = Result.builder(reposResult)
-        .onSuccess((data) => data.repositories)
-        .orElse(() => [])
-
-    return repositories
+    return AsyncResult.getOrElse(reposResult, () => [])
 }
 ```
 
-### Result.getOrElse for Simple Extraction
+### Guards for Early Returns
 
-For simple value extraction without error handling:
+When a component only cares about the success path:
 
 ```typescript
 function UserName() {
     const userResult = useAtomValue(userAtom)
-    const user = Result.getOrElse(userResult, () => null)
 
-    if (!user) return <span>Loading...</span>
-    return <span>{user.name}</span>
+    if (!AsyncResult.isSuccess(userResult)) return <span>Loading...</span>
+    return <span>{userResult.value.name}</span>
 }
 ```
 
@@ -390,24 +411,25 @@ function UserName() {
 
 | Pattern | Use Case |
 |---------|----------|
-| `Result.builder` | UI rendering with multiple error types |
-| `Result.builder + onErrorTag` | APIs with tagged errors (HttpApi, RPC) |
-| `Result.builder + orElse` | Extracting values with fallback |
-| `Result.getOrElse` | Simple value extraction |
-| `Result.match` | Simple 3-case exhaustive matching |
+| `AsyncResult.match` | UI rendering, all three states, no typed-error branching |
+| `AsyncResult.matchWithError` | APIs with tagged errors (HttpApi, RPC) |
+| `AsyncResult.getOrElse` | Extracting values with a fallback |
+| `AsyncResult.isSuccess` guard | Early return when only success matters |
 
 ### Accessing Results in Derived Atoms
 
 ```typescript
 const userProfileAtom = Atom.make(
-    Effect.fnUntraced(function* (get: Atom.Context) {
-        // Unwrap Result to get the value (waits for success)
+    Effect.fnUntraced(function* (get: Atom.AtomContext) {
+        // Unwrap AsyncResult to get the value (waits for success)
         const user = yield* get.result(userAtom)
         const posts = yield* fetchUserPosts(user.id)
         return { user, posts }
     })
 )
 ```
+
+The context type is `Atom.AtomContext` in v4 (v3: `Atom.Context`).
 
 ## Batching Updates
 
@@ -429,7 +451,7 @@ const openModal = (type: ModalType, metadata?: Record<string, unknown>) => {
 
 ```typescript
 import { BrowserKeyValueStore } from "@effect/platform-browser"
-import { Atom } from "@effect-atom/atom-react"
+import { Atom } from "effect/unstable/reactivity"
 import { Schema } from "effect"
 
 // Create runtime with localStorage
@@ -439,10 +461,13 @@ const localStorageRuntime = Atom.runtime(BrowserKeyValueStore.layerLocalStorage)
 const themeAtom = Atom.kvs({
     runtime: localStorageRuntime,
     key: "app-theme",
-    schema: Schema.Literal("dark", "light", "system"),
+    schema: Schema.Literals(["dark", "light", "system"]),
     defaultValue: () => "system" as const,
 })
 ```
+
+Note `Schema.Literals([...])` with an array — v4 made the multi-literal constructor take one
+array argument, and `Schema.Literal` now takes exactly one value.
 
 ## Anti-Patterns
 
@@ -530,20 +555,20 @@ export const modalStateAtom = Atom.make({ isOpen: false })
 export const modalStateAtom = Atom.make({ isOpen: false }).pipe(Atom.keepAlive)
 ```
 
-### FORBIDDEN: Ignoring Result Types
+### FORBIDDEN: Ignoring AsyncResult States
 
 ```typescript
 // WRONG - doesn't handle loading/error states
 const userResult = useAtomValue(userAtom)
 return <div>Hello, {userResult.name}</div> // Type error!
 
-// CORRECT - use Result.builder to handle all states
+// CORRECT - match all states
 const userResult = useAtomValue(userAtom)
-return Result.builder(userResult)
-    .onInitial(() => <div>Loading...</div>)
-    .onError((error) => <div>Error: {error.message}</div>)
-    .onSuccess((user) => <div>Hello, {user.name}</div>)
-    .render()
+return AsyncResult.match(userResult, {
+    onInitial: () => <div>Loading...</div>,
+    onFailure: (failure) => <div>Error: {String(failure.cause)}</div>,
+    onSuccess: (success) => <div>Hello, {success.value.name}</div>,
+})
 ```
 
 ### FORBIDDEN: Updating State During Render
