@@ -51,11 +51,14 @@ for (const file of files) {
   }
 
   // Highlighting must be dual theme, otherwise dark mode shows black on black.
-  assert.ok(html.includes('shiki'), `${file}: no highlighted code found`)
-  assert.ok(
-    html.includes('--shiki-dark'),
-    `${file}: highlighting is not dual theme`,
-  )
+  // Only chapters that actually contain a non-mermaid code fence are checked.
+  if (/^```(?!mermaid)\w/m.test(source)) {
+    assert.ok(html.includes('shiki'), `${file}: code was not highlighted`)
+    assert.ok(
+      html.includes('--shiki-dark'),
+      `${file}: highlighting is not dual theme`,
+    )
+  }
 
   // Prose rule: no em dashes anywhere in the rendered chapter.
   assert.ok(
