@@ -1,0 +1,156 @@
+import { readFile } from 'node:fs/promises'
+import matter from 'gray-matter'
+import rehypeAutolinkHeadings from 'rehype-autolink-headings'
+import rehypeSlug from 'rehype-slug'
+import rehypeStringify from 'rehype-stringify'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import remarkRehype from 'remark-rehype'
+import rehypeShiki from '@shikijs/rehype'
+import { transformerTwoslash } from '@shikijs/twoslash'
+import { toString } from 'hast-util-to-string'
+import ts from 'typescript'
+import { unified } from 'unified'
+import { visit } from 'unist-util-visit'
+import type { Element, Root } from 'hast'
+import type { Plugin } from 'vite'
+
+export type ChapterMeta = {
+  title: string
+  order: number
+  slug: string
+  summary: string
+}
+
+export type Heading = { depth: number; id: string; text: string }
+
+/**
+ * Pull `pre > code.language-mermaid` out of the tree before shiki sees it.
+ * Shiki only matches `pre > code[class*="language-"]`, so replacing the whole
+ * `pre` with a bare `<pre class="mermaid">` makes it invisible to the
+ * highlighter and leaves the diagram source verbatim for client-side mermaid.
+ */
+function rehypeMermaid() {
+  return (tree: Root) => {
+    visit(tree, 'element', (node: Element, index, parent) => {
+      if (node.tagName !== 'pre' || index === undefined || !parent) return
+      const code = node.children.find(
+        (c): c is Element => c.type === 'element' && c.tagName === 'code',
+      )
+      if (!code) return
+      const classes = code.properties?.className
+      const isMermaid =
+        Array.isArray(classes) && classes.includes('language-mermaid')
+      if (!isMermaid) return
+
+      parent.children[index] = {
+        type: 'element',
+        tagName: 'pre',
+        properties: { className: ['mermaid'] },
+        children: [{ type: 'text', value: toString(code) }],
+      }
+    })
+  }
+}
+
+/** Collect h2/h3 (already id'd by rehype-slug) into a flat TOC. */
+function rehypeCollectHeadings(headings: Array<Heading>) {
+  return (tree: Root) => {
+    visit(tree, 'element', (node: Element) => {
+      if (!/^h[23]$/.test(node.tagName)) return
+      const id = node.properties?.id
+      if (typeof id !== 'string') return
+      headings.push({
+        depth: Number(node.tagName[1]),
+        id,
+        text: toString(node),
+      })
+    })
+  }
+}
+
+// Twoslash compiles snippets against the app's own tsconfig-ish settings.
+// Effect needs `strict` — without it the E/R channels infer wrong and the
+// chapters would teach types the reader will never see in their own project.
+const twoslashCompilerOptions: ts.CompilerOptions = {
+  target: ts.ScriptTarget.ESNext,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  strict: true,
+  skipLibCheck: true,
+  lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
+  types: [],
+}
+
+export async function render(source: string, id: string) {
+  const { data, content } = matter(source)
+  const headings: Array<Heading> = []
+
+  const file = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeSlug)
+    .use(rehypeCollectHeadings, headings)
+    .use(rehypeAutolinkHeadings, { behavior: 'wrap' })
+    .use(rehypeMermaid)
+    .use(rehypeShiki, {
+      themes: { light: 'github-light', dark: 'github-dark' },
+      transformers: [
+        transformerTwoslash({
+          // Only blocks tagged ```ts twoslash are compiled. Not every snippet
+          // is standalone-compilable; opting in per block keeps the build
+          // honest instead of forcing every example to be a whole file.
+          explicitTrigger: true,
+          twoslashOptions: { compilerOptions: twoslashCompilerOptions },
+        }),
+      ],
+    })
+    .use(rehypeStringify, { allowDangerousHtml: true })
+    .process(content)
+
+  const slug =
+    (data.slug as string | undefined) ??
+    id.split('/').pop()!.replace(/\.md$/, '')
+
+  const meta: ChapterMeta = {
+    title: data.title ?? slug,
+    order: data.order ?? 999,
+    slug,
+    summary: data.summary ?? '',
+  }
+
+  // A chapter with a diagram pays for mermaid; one without must not.
+  const hasMermaid = String(file).includes('class="mermaid"')
+
+  return { meta, headings, hasMermaid, html: String(file) }
+}
+
+export function markdown(): Plugin {
+  return {
+    name: 'learning-markdown',
+    enforce: 'pre',
+    async transform(source, id) {
+      if (!id.endsWith('.md')) return null
+      const { meta, headings, hasMermaid, html } = await render(source, id)
+      return {
+        code: [
+          `export const meta = ${JSON.stringify(meta)}`,
+          `export const headings = ${JSON.stringify(headings)}`,
+          `export const hasMermaid = ${JSON.stringify(hasMermaid)}`,
+          `export const html = ${JSON.stringify(html)}`,
+          `export default html`,
+        ].join('\n'),
+        map: null,
+      }
+    },
+    // Full reload on content edits: the HTML is a build artifact, there is no
+    // meaningful partial update to apply.
+    async handleHotUpdate({ file, server }) {
+      if (!file.endsWith('.md')) return
+      // Surface twoslash errors in the terminal instead of a silent stale page.
+      await render(await readFile(file, 'utf8'), file)
+      server.hot.send({ type: 'full-reload' })
+    },
+  }
+}
