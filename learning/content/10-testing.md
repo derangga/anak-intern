@@ -239,16 +239,8 @@ person can change them by accident.
 Everything the types already guarantee is not worth a test, and this course
 spent nine chapters moving as much as possible into that category.
 
-## The end
+## Next
 
-That is the course. Ten chapters, one service that really runs, and a page
-where you can break it on purpose.
-
-If you keep one thing, keep this: the reason all of it works is that a program
-is a value, and its failures and its dependencies are written down in the type.
-Everything else, the retries, the stubs, the fake clock, the schema at the
-border, follows from those two facts.
-
-Now take the smallest thing in your own codebase that talks to a network, and
-give it a schema and two named errors. Not a rewrite. One function. That is
-enough to find out whether these ideas hold up in your work.
+Chapter eleven is the last one, and it is the shortest to use: the mistakes
+this course has now made possible, each one paired with the chapter it comes
+from and the fix.
