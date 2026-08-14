@@ -232,22 +232,25 @@ and only that case, handle it inline at the step that produced it. The original
 calls this a divergent strategy. It should be rare, and worth a comment when it
 happens.
 
-## The whole thing as questions
+## The short version
 
-Read the picture, then ask, in order:
+Ten questions, roughly in the order they become answerable:
 
-1. What are the things? Name them.
-2. What is the happy path? Draw it.
-3. Is each step one value or many? Mark it.
-4. Where can it break, and is each break a retry, a fallback, or a crash?
-5. What does each step need to exist? That is `R`.
-6. Where does untrusted data get in? Put a schema there.
+1. What are the things, and what are they called?
+2. What does the happy path look like when nothing goes wrong?
+3. Does each step produce one value, or many over time?
+4. Where can it break, and is each break worth a retry, a fallback, or a crash?
+5. What does each step need in order to work at all?
+6. Where does data you did not create get in?
 7. What behaviour wraps the steps without changing them?
 8. What gets opened, and when does it close?
-9. Can I swap `R` and run the same picture in a test?
-10. Does my code look like the picture?
+9. Would the same picture still run in a test, with something else behind `R`?
+10. Does the code end up looking like the picture?
 
-Then write the code.
+Nobody gets through these cleanly in one pass. Answering question six usually
+sends you back to question two, and that is the cheap part of the work. Most of
+the value is in the first two anyway, and the rest is detail you can fill in
+once the shape is right.
 
 ## Why this is worth reading twice
 
