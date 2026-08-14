@@ -164,12 +164,28 @@
     @apply overflow-x-auto;
   }
 
+  /* Code is set smaller than the prose. A monospace face at the same nominal
+     size reads noticeably larger than the body text next to it. */
   .chapter-prose pre.shiki {
-    @apply relative rounded-lg border p-4 text-sm;
+    @apply relative rounded-lg border px-4 py-3.5;
+    font-size: 0.8125rem;
+    line-height: 1.65;
+    tab-size: 2;
+  }
+
+  .chapter-prose :not(pre) > code {
+    font-size: 0.85em;
+  }
+
+  /* The `^?` type reveal renders in the flow of the block, so it needs its own
+     breathing room rather than the popup spacing the stylesheet assumes. */
+  .chapter-prose .twoslash .twoslash-query-line .twoslash-popup-container {
+    @apply my-1;
+    transform: translateY(0.25em);
   }
 
   .chapter-prose pre.mermaid {
-    @apply flex justify-center overflow-x-auto rounded-lg border bg-transparent p-4;
+    @apply flex justify-center overflow-x-auto rounded-lg border bg-transparent p-6;
   }
 
   .copy-button {
@@ -180,6 +196,12 @@
   .code-block:hover .copy-button,
   .copy-button:focus-visible {
     @apply opacity-100;
+  }
+  /* There is no hover on a touch screen, so the button would never appear. */
+  @media (hover: none) {
+    .copy-button {
+      @apply opacity-100;
+    }
   }
 }
 

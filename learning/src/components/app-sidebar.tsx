@@ -21,7 +21,7 @@ export function AppSidebar() {
           Learning Effect
         </Link>
         <p className="text-muted-foreground text-xs">
-          A course in {chapters.length} chapters
+          A course in {chapters.length} chapter{chapters.length === 1 ? "" : "s"}
         </p>
       </SidebarHeader>
       <SidebarContent>

@@ -86,10 +86,26 @@ genuinely cannot compile on its own.
 
 ## Diagrams
 
-Fenced as `mermaid`. Write literal `<` and `>` in labels. The pipeline escapes
-them for transport and the browser decodes them back. Writing `&lt;` by hand
-escapes the ampersand as well and the reader sees the entity on screen.
-`check:content` fails on this.
+Fenced as `mermaid`. Always quote your labels, and write literal `<` and `>`
+inside them.
+
+```
+Good: A["Effect<A, E, R>"]
+Bad:  A[Effect<A, E, R>]
+Bad:  A["Effect&lt;A, E, R&gt;"]
+```
+
+Two separate things bite here and the build handles both for you, as long as
+the label is quoted.
+
+First, writing `&lt;` by hand gets the ampersand escaped again, and the reader
+sees the raw entity on screen. `check:content` fails on this.
+
+Second, mermaid strips anything that looks like an HTML tag from a label, so
+an unquoted `Effect<A, E, R>` renders as just `Effect`. The plugin rewrites
+`<` and `>` to mermaid's numeric entities, but only inside quoted labels,
+because the `>` in an arrow like `-->` has to survive. An unquoted label skips
+that rewrite and loses its brackets.
 
 ````
 ```mermaid

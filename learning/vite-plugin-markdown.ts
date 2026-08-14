@@ -43,11 +43,21 @@ function rehypeMermaid() {
         Array.isArray(classes) && classes.includes('language-mermaid')
       if (!isMermaid) return
 
+      // Mermaid strips anything that looks like a tag from a label, so a
+      // label like Effect<A, E, R> renders as "Effect". Its own escape is a
+      // numeric entity. Rewrite only inside quoted labels, because the > in
+      // an arrow like --> must survive.
+      const source = toString(code).replace(
+        /"([^"]*)"/g,
+        (_, label: string) =>
+          `"${label.replaceAll('<', '#60;').replaceAll('>', '#62;')}"`,
+      )
+
       parent.children[index] = {
         type: 'element',
         tagName: 'pre',
         properties: { className: ['mermaid'] },
-        children: [{ type: 'text', value: toString(code) }],
+        children: [{ type: 'text', value: source }],
       }
     })
   }
@@ -103,6 +113,11 @@ export async function render(source: string, id: string) {
           // honest instead of forcing every example to be a whole file.
           explicitTrigger: true,
           twoslashOptions: { compilerOptions: twoslashCompilerOptions },
+          // `^?` renders as a block under the line instead of an absolutely
+          // positioned popup. The popup is clipped by the code block's own
+          // horizontal scrolling, and a reader should not have to hover to
+          // see the type the chapter is making a point about.
+          rendererRich: { queryRendering: 'line' },
         }),
       ],
     })
