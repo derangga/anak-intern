@@ -1,4 +1,5 @@
 import { Link, useMatchRoute } from '@tanstack/react-router'
+import { FlaskConical } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -49,6 +50,22 @@ export function AppSidebar() {
                 />
               </SidebarMenuItem>
             ))}
+          </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Try it</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={!!matchRoute({ to: '/demo' })}
+                render={
+                  <Link to="/demo">
+                    <FlaskConical className="size-4" />
+                    <span className="truncate">Live demo</span>
+                  </Link>
+                }
+              />
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

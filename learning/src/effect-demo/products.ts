@@ -6,13 +6,13 @@
  * server having a bad minute and a request that was simply wrong.
  */
 import {
+  type Cause,
   Config,
   Context,
   Effect,
   Layer,
   Schedule,
   Schema,
-  type Cause,
 } from 'effect'
 
 // ---------------------------------------------------------------------------
