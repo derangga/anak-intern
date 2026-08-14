@@ -115,6 +115,10 @@ When a snippet does fail to compile, `bun run check:content` prints which file
 and which numbered twoslash block broke, followed by the compiler error. Line
 numbers in the error count from the start of that block, after the cut.
 
+Snippets compile with `strict` on, DOM types available, and `vite/client`
+loaded, so `fetch` and `import.meta.env` are both real. Nothing else from the
+app is in scope: import from `effect` and declare the rest.
+
 **Untagged.** Highlighted only, never compiled. Use for fragments, for
 deliberately wrong code you are about to fix, and for anything that cannot
 stand alone as a file.

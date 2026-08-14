@@ -89,7 +89,9 @@ const twoslashCompilerOptions: ts.CompilerOptions = {
   strict: true,
   skipLibCheck: true,
   lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
-  types: [],
+  // vite/client is what makes `import.meta.env` real in snippets. Without it
+  // the browser Config chapter renders a red squiggle on the line it teaches.
+  types: ['vite/client'],
 }
 
 export async function render(source: string, id: string) {
