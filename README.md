@@ -6,7 +6,7 @@ Personal collection of Claude Code skills.
 
 - **bro** — Restate the last message in plain human language, no jargon.
 - **design-thinking** — Design thinking workflow and reference graph.
-- **learning** — a course on the Effect TypeScript library, rendered from markdown. See `learning/CONTENT.md` to write a chapter.
+- **learning-effect-app** — a course on the Effect TypeScript library, rendered from markdown. See `learning-effect-app/CONTENT.md` to write a chapter.
 - **effect-best-practices** — Best practices, patterns, and anti-patterns for the [Effect](https://effect.website) TypeScript library.
 
 ## Credits
