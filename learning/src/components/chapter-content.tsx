@@ -21,96 +21,74 @@ function useIsDark() {
 }
 
 /** Add a copy button to every highlighted code block. */
-function useCopyButtons(root: React.RefObject<HTMLDivElement | null>) {
-  useEffect(() => {
-    const blocks = root.current?.querySelectorAll('pre.shiki')
-    if (!blocks) return
+function addCopyButtons(root: HTMLElement) {
+  for (const pre of root.querySelectorAll('pre.shiki')) {
+    if (!(pre instanceof HTMLElement)) continue
 
-    const cleanups: Array<() => void> = []
-    for (const pre of blocks) {
-      if (!(pre instanceof HTMLElement)) continue
+    // The button lives on a wrapper, not inside the pre. The pre is the
+    // scrolling box, so a button inside it slides away with the code.
+    const wrapper = document.createElement('div')
+    wrapper.className = 'code-block'
+    pre.replaceWith(wrapper)
+    wrapper.appendChild(pre)
 
-      // The button lives on a wrapper, not inside the pre. The pre is the
-      // scrolling box, so a button inside it slides away with the code.
-      const wrapper = document.createElement('div')
-      wrapper.className = 'code-block'
-      pre.replaceWith(wrapper)
-      wrapper.appendChild(pre)
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'copy-button'
+    button.textContent = 'Copy'
+    button.setAttribute('aria-label', 'Copy code')
 
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'copy-button'
-      button.textContent = 'Copy'
-      button.setAttribute('aria-label', 'Copy code')
-
-      const onClick = async () => {
-        // Twoslash injects popups into the DOM; the code element's text is
-        // still the source the reader sees, so copy exactly that.
-        const code = pre.querySelector('code')?.textContent ?? ''
+    button.addEventListener('click', async () => {
+      // Twoslash injects popups into the DOM; the code element's text is
+      // still the source the reader sees, so copy exactly that.
+      const code = pre.querySelector('code')?.textContent ?? ''
+      try {
         await navigator.clipboard.writeText(code)
         button.textContent = 'Copied'
-        setTimeout(() => {
-          button.textContent = 'Copy'
-        }, 1500)
+      } catch {
+        // Denied permission or an insecure context. Say so rather than
+        // looking like the click did nothing.
+        button.textContent = 'Failed'
       }
+      setTimeout(() => {
+        button.textContent = 'Copy'
+      }, 1500)
+    })
 
-      button.addEventListener('click', onClick)
-      wrapper.appendChild(button)
-      cleanups.push(() => {
-        button.removeEventListener('click', onClick)
-        button.remove()
-        wrapper.replaceWith(pre)
-      })
-    }
-
-    return () => {
-      for (const fn of cleanups) fn()
-    }
-  }, [root])
+    wrapper.appendChild(button)
+  }
 }
 
 /**
- * Render mermaid diagrams, loading the library only on chapters that have one.
- * Mermaid is around half a megabyte, so a chapter without a diagram must not
- * pay for it.
+ * Draw the diagrams, loading mermaid only for chapters that have one. It is
+ * around half a megabyte, so a chapter without a diagram must not pay for it.
  */
-function useMermaid(
-  root: React.RefObject<HTMLDivElement | null>,
-  enabled: boolean,
-  dark: boolean,
-) {
-  useEffect(() => {
-    if (!enabled) return
-    let cancelled = false
+function drawMermaid(root: HTMLElement, dark: boolean) {
+  const nodes = root.querySelectorAll<HTMLElement>('pre.mermaid')
+  if (nodes.length === 0) return
 
-    const draw = async () => {
-      const nodes = root.current?.querySelectorAll<HTMLElement>('pre.mermaid')
-      if (!nodes?.length) return
+  let cancelled = false
 
-      const mermaid = (await import('mermaid')).default
-      if (cancelled) return
+  void (async () => {
+    const mermaid = (await import('mermaid')).default
+    // The reader may have moved on while the import was in flight.
+    if (cancelled || !root.isConnected) return
 
-      for (const node of nodes) {
-        // Mermaid replaces the element's contents with an SVG, so keep the
-        // source around or a re-theme has nothing left to draw from.
-        node.dataset.source ??= node.textContent ?? ''
-        node.textContent = node.dataset.source
-        node.removeAttribute('data-processed')
-      }
-
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: dark ? 'dark' : 'default',
-      })
-      await mermaid.run({ nodes: Array.from(nodes) })
+    for (const node of nodes) {
+      // Mermaid replaces the element's contents with an SVG, so keep the
+      // source around or a re-theme has nothing left to draw from.
+      node.dataset.source ??= node.textContent ?? ''
+      node.textContent = node.dataset.source
+      node.removeAttribute('data-processed')
     }
 
-    void draw()
+    mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default' })
+    await mermaid.run({ nodes: Array.from(nodes) })
+  })()
 
-    return () => {
-      cancelled = true
-    }
-  }, [root, enabled, dark])
+  return () => {
+    cancelled = true
+  }
 }
 
 export function ChapterContent({
@@ -123,16 +101,23 @@ export function ChapterContent({
   const ref = useRef<HTMLDivElement>(null)
   const dark = useIsDark()
 
-  useCopyButtons(ref)
-  useMermaid(ref, hasMermaid, dark)
+  /**
+   * The markup is written here rather than with dangerouslySetInnerHTML, and
+   * that is deliberate. React rewrote the container's innerHTML after these
+   * effects had already run: the copy buttons were built and then thrown away,
+   * and mermaid finished loading to find its node detached, so navigating back
+   * to a chapter you had already visited showed no diagrams. Owning the write
+   * means the decoration cannot be undone by a commit we do not control.
+   */
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
 
-  return (
-    <div
-      ref={ref}
-      className="chapter-prose"
-      // Built at compile time by vite-plugin-markdown, never user input.
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: build-time HTML
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  )
+    root.innerHTML = html
+    addCopyButtons(root)
+
+    return hasMermaid ? drawMermaid(root, dark) : undefined
+  }, [html, hasMermaid, dark])
+
+  return <div ref={ref} className="chapter-prose" />
 }

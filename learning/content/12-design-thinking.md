@@ -13,9 +13,9 @@ before any code exists.
 It is adapted, with thanks, from
 [Design Thinking](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a)
 by [r17x](https://github.com/r17x). The ideas and the order of the steps are
-theirs. The plain language, the examples from this course, and any mistakes are
-mine. The original is shorter and sharper, and covers designing user interfaces
-as well, so read that too.
+theirs. The plainer language and the examples from this course were added here,
+along with any mistakes that came with them. The original is shorter and
+sharper, and covers designing user interfaces as well, so read that too.
 
 ## The one sentence version
 
@@ -201,7 +201,7 @@ know you did not miss one.
 
 ### Each layer cleans up after itself
 
-This is the part I found most useful, and the capstone already does it without
+This is the part most worth stealing, and the capstone already does it without
 naming it.
 
 A failure should not travel further than the layer that understands it. Each
