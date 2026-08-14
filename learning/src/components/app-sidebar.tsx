@@ -21,7 +21,8 @@ export function AppSidebar() {
           Learning Effect
         </Link>
         <p className="text-muted-foreground text-xs">
-          A course in {chapters.length} chapter{chapters.length === 1 ? "" : "s"}
+          A course in {chapters.length} chapter
+          {chapters.length === 1 ? '' : 's'}
         </p>
       </SidebarHeader>
       <SidebarContent>
@@ -32,7 +33,10 @@ export function AppSidebar() {
               <SidebarMenuItem key={meta.slug}>
                 <SidebarMenuButton
                   isActive={
-                    !!matchRoute({ to: '/learn/$slug', params: { slug: meta.slug } })
+                    !!matchRoute({
+                      to: '/learn/$slug',
+                      params: { slug: meta.slug },
+                    })
                   }
                   render={
                     <Link to="/learn/$slug" params={{ slug: meta.slug }}>

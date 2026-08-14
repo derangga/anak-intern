@@ -13,7 +13,10 @@ export const Route = createFileRoute('/learn/$slug')({
   notFoundComponent: () => (
     <div className="mx-auto w-full max-w-3xl px-6 py-16">
       <h1 className="text-2xl font-bold">No such chapter</h1>
-      <Link to="/" className="text-muted-foreground mt-2 inline-block underline">
+      <Link
+        to="/"
+        className="text-muted-foreground mt-2 inline-block underline"
+      >
         Back to the chapter list
       </Link>
     </div>
