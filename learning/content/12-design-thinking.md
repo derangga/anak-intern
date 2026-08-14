@@ -14,7 +14,8 @@ It is adapted, with thanks, from
 [Design Thinking](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a)
 by [r17x](https://github.com/r17x). The ideas and the order of the steps are
 theirs. The plain language, the examples from this course, and any mistakes are
-mine.
+mine. The original is shorter and sharper, and covers designing user interfaces
+as well, so read that too.
 
 ## The one sentence version
 
@@ -257,11 +258,3 @@ six.
 
 That is the reason this chapter is at the end rather than the beginning. You
 cannot design with tools you have not used.
-
-## Credit
-
-This chapter is an adaptation of
-[Design Thinking](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a)
-by [r17x](https://github.com/r17x), rewritten in the plainer language this
-course uses and tied to the examples you have already read. The original is
-shorter and sharper, and covers design for user interfaces as well. Read it.
