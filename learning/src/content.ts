@@ -14,6 +14,12 @@ export const chapters: Array<Chapter> = Object.values(modules).sort(
   (a, b) => a.meta.order - b.meta.order,
 )
 
+/** The numbered course, in reading order. */
+export const courseChapters = chapters.filter((c) => c.meta.group === 'course')
+
+/** Extra reading, listed separately because it assumes the course. */
+export const bonusChapters = chapters.filter((c) => c.meta.group === 'bonus')
+
 export const chapterBySlug = (slug: string) =>
   chapters.find((c) => c.meta.slug === slug)
 

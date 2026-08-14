@@ -156,6 +156,10 @@ flowchart LR
 ```
 ````
 
+One consequence of that rewrite: `<br/>` inside a label renders as the literal
+text `<br/>`, because the escaping happens before mermaid sees it. Keep labels
+to one line, or split them across two nodes.
+
 Mermaid is around half a megabyte and loads only on chapters that contain a
 diagram, so do not add one out of habit. Add one when a picture explains
 something that a paragraph does not.

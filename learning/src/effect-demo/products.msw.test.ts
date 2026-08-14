@@ -8,15 +8,10 @@
  */
 import { ConfigProvider, Effect, Fiber, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
-import { http, HttpResponse } from 'msw'
+import { HttpResponse, http } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, expect, test } from 'vitest'
-import {
-  Attempts,
-  Fetcher,
-  ProductsApi,
-  type ProductsError,
-} from './products'
+import { Attempts, Fetcher, ProductsApi, type ProductsError } from './products'
 
 const baseUrl = 'https://api.test'
 

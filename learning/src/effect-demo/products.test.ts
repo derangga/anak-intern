@@ -10,7 +10,7 @@
  */
 import { ConfigProvider, Effect, Fiber, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
-import { describe as suite, expect, test } from 'vitest'
+import { expect, describe as suite, test } from 'vitest'
 import { type Fault, fetcherLayer } from './faults'
 import {
   type Attempt,

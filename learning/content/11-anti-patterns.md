@@ -352,3 +352,7 @@ border, follows from those two facts.
 Now take the smallest thing in your own codebase that talks to a network, and
 give it a schema and two named errors. Not a rewrite. One function. That is
 enough to find out whether these ideas hold up in your work.
+
+There is one bonus chapter after this one, on designing a program before you
+write it. It only makes sense now that you know what the three channels are,
+which is why it sits outside the numbered course.

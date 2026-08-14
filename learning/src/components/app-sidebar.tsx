@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { FlaskConical } from 'lucide-react'
+import { Compass, FlaskConical } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { chapters } from '@/content'
+import { bonusChapters, courseChapters } from '@/content'
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute()
@@ -22,15 +22,15 @@ export function AppSidebar() {
           Learning Effect
         </Link>
         <p className="text-muted-foreground text-xs">
-          A course in {chapters.length} chapter
-          {chapters.length === 1 ? '' : 's'}
+          A course in {courseChapters.length} chapter
+          {courseChapters.length === 1 ? '' : 's'}
         </p>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Chapters</SidebarGroupLabel>
           <SidebarMenu>
-            {chapters.map(({ meta }) => (
+            {courseChapters.map(({ meta }) => (
               <SidebarMenuItem key={meta.slug}>
                 <SidebarMenuButton
                   isActive={
@@ -52,6 +52,31 @@ export function AppSidebar() {
             ))}
           </SidebarMenu>
         </SidebarGroup>
+        {bonusChapters.length > 0 ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>Bonus</SidebarGroupLabel>
+            <SidebarMenu>
+              {bonusChapters.map(({ meta }) => (
+                <SidebarMenuItem key={meta.slug}>
+                  <SidebarMenuButton
+                    isActive={
+                      !!matchRoute({
+                        to: '/learn/$slug',
+                        params: { slug: meta.slug },
+                      })
+                    }
+                    render={
+                      <Link to="/learn/$slug" params={{ slug: meta.slug }}>
+                        <Compass className="size-4" />
+                        <span className="truncate">{meta.title}</span>
+                      </Link>
+                    }
+                  />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        ) : null}
         <SidebarGroup>
           <SidebarGroupLabel>Try it</SidebarGroupLabel>
           <SidebarMenu>

@@ -20,6 +20,8 @@ export type ChapterMeta = {
   order: number
   slug: string
   summary: string
+  /** Which sidebar group this belongs to. Defaults to the main course. */
+  group: 'course' | 'bonus'
 }
 
 export type Heading = { depth: number; id: string; text: string }
@@ -144,6 +146,7 @@ export async function render(source: string, id: string) {
     order: data.order ?? 999,
     slug,
     summary: data.summary ?? '',
+    group: data.group === 'bonus' ? 'bonus' : 'course',
   }
 
   // A chapter with a diagram pays for mermaid; one without must not.
