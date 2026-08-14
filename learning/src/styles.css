@@ -115,3 +115,81 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Chapter prose. Hand rolled instead of @tailwindcss/typography: the plugin
+   mostly needs overriding for code blocks anyway, and this is smaller. */
+@layer components {
+  .chapter-prose {
+    @apply text-base/7;
+  }
+  .chapter-prose > * + * {
+    @apply mt-5;
+  }
+  .chapter-prose h2 {
+    @apply mt-12 scroll-mt-20 text-2xl font-semibold tracking-tight;
+  }
+  .chapter-prose h3 {
+    @apply mt-8 scroll-mt-20 text-xl font-semibold tracking-tight;
+  }
+  .chapter-prose h2 a,
+  .chapter-prose h3 a {
+    @apply text-foreground no-underline;
+  }
+  .chapter-prose a {
+    @apply underline underline-offset-4;
+  }
+  .chapter-prose ul {
+    @apply list-disc space-y-2 pl-6;
+  }
+  .chapter-prose ol {
+    @apply list-decimal space-y-2 pl-6;
+  }
+  .chapter-prose blockquote {
+    @apply border-l-2 pl-4 italic;
+  }
+  .chapter-prose :not(pre) > code {
+    @apply bg-muted rounded px-1.5 py-0.5 text-[0.875em];
+  }
+  .chapter-prose table {
+    @apply w-full text-sm;
+  }
+  .chapter-prose th,
+  .chapter-prose td {
+    @apply border-b px-3 py-2 text-left;
+  }
+
+  /* Wide content scrolls inside itself, the page body never does. */
+  .chapter-prose pre,
+  .chapter-prose .table-wrapper {
+    @apply overflow-x-auto;
+  }
+
+  .chapter-prose pre.shiki {
+    @apply relative rounded-lg border p-4 text-sm;
+  }
+
+  .chapter-prose pre.mermaid {
+    @apply flex justify-center overflow-x-auto rounded-lg border bg-transparent p-4;
+  }
+
+  .copy-button {
+    @apply bg-background/80 text-muted-foreground hover:text-foreground absolute
+      top-2 right-2 rounded border px-2 py-1 text-xs opacity-0 backdrop-blur
+      transition-opacity;
+  }
+  .code-block:hover .copy-button,
+  .copy-button:focus-visible {
+    @apply opacity-100;
+  }
+}
+
+/* Shiki dual theme: the light colours are inline styles, the dark ones are
+   CSS variables on the same nodes. Without this, dark mode is black on black. */
+.dark .shiki,
+.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
