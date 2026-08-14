@@ -95,6 +95,19 @@ Write it as `const log = Effect.sync(() => console.log('done'))` instead. Also
 note that `declare` lines are stripped before the query runs, so you cannot
 point `^?` at one.
 
+When the declaration genuinely cannot fit on one line, such as a multi-line
+`pipe` or an options object, do not force it. Write the type as an annotation
+instead:
+
+```
+const piped: Effect.Effect<number, 'NotFound' | 'BadFormat'> = readFile(
+  'port.txt',
+).pipe(Effect.flatMap(parse))
+```
+
+The reader still sees the type, and because the block is compiled, a wrong
+annotation fails the build. That is a stronger guarantee than a reveal.
+
 `// ---cut---` hides everything above it from the reader while still
 compiling it. Use it to skip imports and setup that were already shown.
 
