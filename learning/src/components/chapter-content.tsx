@@ -40,7 +40,13 @@ function useCopyButtons(root: React.RefObject<HTMLDivElement | null>) {
     const cleanups: Array<() => void> = []
     for (const pre of blocks) {
       if (!(pre instanceof HTMLElement)) continue
-      pre.classList.add('code-block')
+
+      // The button lives on a wrapper, not inside the pre. The pre is the
+      // scrolling box, so a button inside it slides away with the code.
+      const wrapper = document.createElement('div')
+      wrapper.className = 'code-block'
+      pre.replaceWith(wrapper)
+      wrapper.appendChild(pre)
 
       const button = document.createElement('button')
       button.type = 'button'
@@ -60,10 +66,11 @@ function useCopyButtons(root: React.RefObject<HTMLDivElement | null>) {
       }
 
       button.addEventListener('click', onClick)
-      pre.appendChild(button)
+      wrapper.appendChild(button)
       cleanups.push(() => {
         button.removeEventListener('click', onClick)
         button.remove()
+        wrapper.replaceWith(pre)
       })
     }
 

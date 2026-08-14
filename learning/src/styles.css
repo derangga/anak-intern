@@ -177,12 +177,10 @@
     font-size: 0.85em;
   }
 
-  /* The `^?` type reveal renders in the flow of the block, so it needs its own
-     breathing room rather than the popup spacing the stylesheet assumes. */
-  .chapter-prose .twoslash .twoslash-query-line .twoslash-popup-container {
-    @apply my-1;
-    transform: translateY(0.25em);
+  .chapter-prose .code-block {
+    @apply relative;
   }
+
 
   .chapter-prose pre.mermaid {
     @apply flex justify-center overflow-x-auto rounded-lg border bg-transparent p-6;
@@ -214,4 +212,28 @@
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
   text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+/* Twoslash overrides. These sit outside @layer components on purpose: the
+   twoslash stylesheet is unlayered, and unlayered rules beat layered ones no
+   matter how specific the layered selector is. */
+
+/* Hover popups are absolutely positioned and merely transparent when idle, but
+   an invisible box still counts toward a scroll container's scrollable area.
+   Each one carries a full JSDoc block, so leaving them in layout gave every
+   code block scrollbars in both directions even when the code fit. Taking them
+   out of layout until hover is what actually removes them. */
+.chapter-prose .twoslash .twoslash-hover .twoslash-popup-container {
+  display: none;
+}
+.chapter-prose .twoslash .twoslash-hover:hover .twoslash-popup-container {
+  display: inline-flex;
+}
+
+/* The `^?` reveal is in the flow of the block, so it stays laid out and needs
+   plain margins rather than the popup's offset transform. */
+.chapter-prose .twoslash .twoslash-query-line .twoslash-popup-container {
+  display: inline-flex;
+  transform: none;
+  margin-block: 0.25rem;
 }
