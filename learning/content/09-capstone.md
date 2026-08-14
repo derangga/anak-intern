@@ -293,7 +293,7 @@ decided it was `error.status >= 500`.
 
 ## What you actually learned
 
-Strip away the syntax and the course was four claims.
+Strip away the syntax and this service rests on four claims.
 
 **A program is a value.** Nothing runs until you run it, which is why an Effect
 can be retried, timed out, or handed a different implementation, all after it
@@ -313,12 +313,12 @@ beats a cast at every use.
 None of this needs Effect. It needs the discipline, and Effect is a way to get
 the compiler to enforce the discipline for you.
 
-## Where to go next
+## Next
 
-Open `src/effect-demo/products.ts` in this repository and read the real file.
-It has a little more in it than the version above, and now none of it should be
-surprising.
+Chapter ten tests this service: swapping the Fetcher for an object, swapping
+the real clock for a fake one so the retry tests finish instantly, and the one
+job that still needs a network mocking library.
 
-Then take the smallest thing in your own codebase that talks to a network, and
-give it a schema and two named errors. Not a rewrite. One function. That is
-enough to find out whether the ideas hold up in your work.
+Before that, open `src/effect-demo/products.ts` in this repository and read the
+real file. It has a little more in it than the version above, and now none of
+it should be surprising.

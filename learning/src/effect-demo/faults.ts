@@ -29,7 +29,7 @@ export const faultLabels: Record<Fault, string> = {
 }
 
 /** Longer than the service's timeout, so the timeout branch actually fires. */
-const tooSlow = 4000
+const tooSlow = '4 seconds'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -60,12 +60,9 @@ export const fetcherLayer = (fault: Fault): Layer.Layer<Fetcher> =>
           case 'wrong-shape':
             return Effect.succeed(json([{ id: 'one', title: 42 }]))
           case 'slow':
-            return Effect.promise(
-              () =>
-                new Promise<Response>((resolve) => {
-                  setTimeout(() => resolve(json([])), tooSlow)
-                }),
-            )
+            // Effect.sleep rather than setTimeout, so a test can drive this
+            // with a fake clock instead of actually waiting.
+            return Effect.sleep(tooSlow).pipe(Effect.as(json([])))
         }
       },
     }),
