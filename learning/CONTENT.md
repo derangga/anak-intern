@@ -69,10 +69,16 @@ const program = Effect.succeed(1)
 ```
 ````
 
-`//    ^?` reveals the inferred type on the line above. Use it whenever the
-point of the snippet is what Effect inferred, especially for the error and
-requirement channels. It is the strongest teaching tool in this setup, so
-reach for it often.
+`//    ^?` reveals the inferred type on the line above, as a block under that
+line. Use it whenever the point of the snippet is what Effect inferred,
+especially for the error and requirement channels. It is the strongest
+teaching tool in this setup, so reach for it often.
+
+Hover tooltips are turned off on purpose. Twoslash adds one to every
+identifier by default, but the popup is absolutely positioned and gets clipped
+by the code block it sits in, and a type worth teaching should be pinned on
+the page rather than hidden behind a hover. If a type matters, mark it with
+`^?`.
 
 `// ---cut---` hides everything above it from the reader while still
 compiling it. Use it to skip imports and setup that were already shown.

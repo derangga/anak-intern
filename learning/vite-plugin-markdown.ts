@@ -112,7 +112,16 @@ export async function render(source: string, id: string) {
           // is standalone-compilable; opting in per block keeps the build
           // honest instead of forcing every example to be a whole file.
           explicitTrigger: true,
-          twoslashOptions: { compilerOptions: twoslashCompilerOptions },
+          twoslashOptions: {
+            compilerOptions: twoslashCompilerOptions,
+            // Drop hover popups. They are a twoslash default, not something
+            // this course needs: the popup is absolutely positioned and gets
+            // clipped by the code block it lives in, and a type worth teaching
+            // should be pinned with `^?` rather than hidden behind a hover.
+            // Filtering the nodes also removes the dotted underlines, which
+            // otherwise advertise an interaction that no longer does anything.
+            filterNode: (node) => node.type !== 'hover',
+          },
           // `^?` renders as a block under the line instead of an absolutely
           // positioned popup. The popup is clipped by the code block's own
           // horizontal scrolling, and a reader should not have to hover to

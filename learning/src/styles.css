@@ -218,18 +218,6 @@
    twoslash stylesheet is unlayered, and unlayered rules beat layered ones no
    matter how specific the layered selector is. */
 
-/* Hover popups are absolutely positioned and merely transparent when idle, but
-   an invisible box still counts toward a scroll container's scrollable area.
-   Each one carries a full JSDoc block, so leaving them in layout gave every
-   code block scrollbars in both directions even when the code fit. Taking them
-   out of layout until hover is what actually removes them. */
-.chapter-prose .twoslash .twoslash-hover .twoslash-popup-container {
-  display: none;
-}
-.chapter-prose .twoslash .twoslash-hover:hover .twoslash-popup-container {
-  display: inline-flex;
-}
-
 /* The `^?` reveal is in the flow of the block, so it stays laid out and needs
    plain margins rather than the popup's offset transform. */
 .chapter-prose .twoslash .twoslash-query-line .twoslash-popup-container {

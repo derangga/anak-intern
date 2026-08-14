@@ -1,34 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /** Watch the html element for the dark class, so mermaid can re-theme. */
 function useIsDark() {
-  const ref = useRef(
-    typeof document !== 'undefined' &&
+  const [dark, setDark] = useState(
+    () =>
+      typeof document !== 'undefined' &&
       document.documentElement.classList.contains('dark'),
   )
-  const listeners = useRef(new Set<(dark: boolean) => void>())
 
   useEffect(() => {
     const el = document.documentElement
-    const observer = new MutationObserver(() => {
-      const dark = el.classList.contains('dark')
-      if (dark === ref.current) return
-      ref.current = dark
-      for (const fn of listeners.current) fn(dark)
-    })
+    const observer = new MutationObserver(() =>
+      setDark(el.classList.contains('dark')),
+    )
     observer.observe(el, { attributes: true, attributeFilter: ['class'] })
     return () => observer.disconnect()
   }, [])
 
-  return {
-    get current() {
-      return ref.current
-    },
-    subscribe(fn: (dark: boolean) => void) {
-      listeners.current.add(fn)
-      return () => listeners.current.delete(fn)
-    },
-  }
+  return dark
 }
 
 /** Add a copy button to every highlighted code block. */
@@ -88,13 +77,13 @@ function useCopyButtons(root: React.RefObject<HTMLDivElement | null>) {
 function useMermaid(
   root: React.RefObject<HTMLDivElement | null>,
   enabled: boolean,
-  theme: ReturnType<typeof useIsDark>,
+  dark: boolean,
 ) {
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
 
-    const draw = async (dark: boolean) => {
+    const draw = async () => {
       const nodes = root.current?.querySelectorAll<HTMLElement>('pre.mermaid')
       if (!nodes?.length) return
 
@@ -116,14 +105,12 @@ function useMermaid(
       await mermaid.run({ nodes: Array.from(nodes) })
     }
 
-    void draw(theme.current)
-    const unsubscribe = theme.subscribe((dark) => void draw(dark))
+    void draw()
 
     return () => {
       cancelled = true
-      unsubscribe()
     }
-  }, [root, enabled, theme])
+  }, [root, enabled, dark])
 }
 
 export function ChapterContent({
@@ -134,10 +121,10 @@ export function ChapterContent({
   hasMermaid: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const theme = useIsDark()
+  const dark = useIsDark()
 
   useCopyButtons(ref)
-  useMermaid(ref, hasMermaid, theme)
+  useMermaid(ref, hasMermaid, dark)
 
   return (
     <div
