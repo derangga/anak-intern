@@ -30,8 +30,8 @@ const result = await Effect.runPromise(program)
 
 ```mermaid
 flowchart LR
-  A[Effect&lt;A, E, R&gt;] --> B[runPromise]
-  B --> C[Promise&lt;A&gt;]
+  A["Effect<A, E, R>"] --> B["runPromise"]
+  B --> C["Promise<A>"]
 ```
 
 ## An untagged block

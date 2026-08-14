@@ -48,6 +48,14 @@ for (const file of files) {
       !/<pre class="mermaid">\s*<span/.test(html),
       `${file}: mermaid block got highlighted`,
     )
+    // Write literal < and > in diagram labels. The pipeline escapes them for
+    // transport and the browser decodes them back. Writing the entity by hand
+    // escapes the ampersand too, and the reader sees "&lt;" in the diagram.
+    const diagram = html.slice(html.indexOf('<pre class="mermaid">'))
+    assert.ok(
+      !diagram.includes('&#x26;lt;') && !diagram.includes('&#x26;gt;'),
+      `${file}: mermaid label has a double escaped entity, write < and > directly`,
+    )
   }
 
   // Highlighting must be dual theme, otherwise dark mode shows black on black.
