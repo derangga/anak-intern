@@ -12,13 +12,13 @@
 import { Effect } from "effect"
 
 const managedConnection = Effect.acquireRelease(
-    // Acquire — runs once, can fail
+    // Acquire, runs once, can fail
     Effect.gen(function* () {
         const conn = yield* connectToDatabase()
         yield* Effect.log("Connection acquired")
         return conn
     }),
-    // Release — guaranteed to run, receives the acquired resource and the Exit
+    // Release, guaranteed to run, receives the acquired resource and the Exit
     (conn) =>
         Effect.gen(function* () {
             yield* conn.close()
@@ -30,14 +30,14 @@ const managedConnection = Effect.acquireRelease(
 v3's `Effect.acquireReleaseInterruptible` is now an option: `Effect.acquireRelease(acquire,
 release, { interruptible: true })`.
 
-> See also: `anti-patterns.md` — [Manual try/finally for Resource Cleanup] for why `try/finally` doesn't work in Effect generators
+> See also: [Manual try/finally for Resource Cleanup] in `anti-patterns.md` for why `try/finally` doesn't work in Effect generators
 
 ### Using the Resource
 
 ```typescript
 const program = managedConnection.pipe(
     Effect.flatMap((conn) => conn.query("SELECT * FROM users")),
-    Effect.scoped, // Required — triggers release when scope closes
+    Effect.scoped, // Required, triggers release when scope closes
 )
 ```
 
@@ -59,7 +59,7 @@ const result = yield* Effect.scoped(
 ### Scoped Generator Block
 
 ```typescript
-// Scope wraps a gen block — resource available throughout
+// Scope wraps a gen block, resource available throughout
 const result = yield* Effect.scoped(
     Effect.gen(function* () {
         const conn = yield* managedConnection
@@ -91,7 +91,7 @@ const program = Effect.scoped(
 
 ### Providing a Scope Without Closing It
 
-v3's `Scope.extend` is `Scope.provide` in v4 — it satisfies an effect's `Scope` requirement
+v3's `Scope.extend` is `Scope.provide` in v4. It satisfies an effect's `Scope` requirement
 without closing the scope when the effect completes:
 
 ```typescript
@@ -100,11 +100,11 @@ import { Effect, Scope } from "effect"
 const program = Effect.gen(function* () {
     const scope = yield* Scope.make()
     yield* myScopedEffect.pipe(Scope.provide(scope))
-    // scope still open — close it explicitly when you're done
+    // scope still open, close it explicitly when you're done
 })
 ```
 
-Note: in tests, `it.effect` and `it.live` already provide and close a `Scope` per test — do not
+Note: in tests, `it.effect` and `it.live` already provide and close a `Scope` per test, so do not
 wrap test bodies in `Effect.scoped`. See `testing-patterns.md`.
 
 ## Cleanup Guarantees
@@ -143,7 +143,7 @@ Register cleanup logic directly within a scoped block:
 const program = Effect.scoped(
     Effect.gen(function* () {
         yield* Effect.addFinalizer(() =>
-            Effect.log("Scope closing — cleaning up"),
+            Effect.log("Scope closing, cleaning up"),
         )
 
         const conn = yield* connect()
@@ -157,11 +157,11 @@ const program = Effect.scoped(
 )
 ```
 
-> See also: `concurrency-patterns.md` — [Graceful Shutdown] for using `addFinalizer` with `NodeRuntime.runMain`
+> See also: [Graceful Shutdown] in `concurrency-patterns.md` for using `addFinalizer` with `NodeRuntime.runMain`
 
 ## Resource Hierarchies
 
-When multiple resources are acquired in a scope, they form a hierarchy with **LIFO (Last-In, First-Out) release ordering** — the last resource acquired is the first to be released.
+When multiple resources are acquired in a scope, they form a hierarchy with **LIFO (Last-In, First-Out) release ordering**. The last resource acquired is the first to be released.
 
 ```typescript
 const program = Effect.scoped(
@@ -182,7 +182,7 @@ const program = Effect.scoped(
 
 ### Nested acquireRelease
 
-Resources can be nested — inner resources are released before outer ones:
+Resources can be nested. Inner resources are released before outer ones:
 
 ```typescript
 const managedPool = Effect.acquireRelease(
@@ -219,7 +219,7 @@ const program = Effect.gen(function* () {
         size: 10,
     })
 
-    // Borrow a connection — returned to the pool when the scope closes
+    // Borrow a connection, returned to the pool when the scope closes
     const result = yield* Effect.scoped(
         Effect.gen(function* () {
             const conn = yield* Pool.get(pool)
@@ -229,7 +229,7 @@ const program = Effect.gen(function* () {
 })
 ```
 
-`Pool.get(pool)` is a module function in v4 — there is no `pool.get` property.
+`Pool.get(pool)` is a module function in v4. There is no `pool.get` property.
 
 ### Pool Configuration
 
@@ -245,7 +245,7 @@ const pool = yield* Pool.makeWithTTL({
 })
 ```
 
-Both constructors require a `Scope` — the pool is torn down when the enclosing scope closes.
+Both constructors require a `Scope`. The pool is torn down when the enclosing scope closes.
 
 ### Pool vs Manual Management
 
@@ -259,7 +259,7 @@ Both constructors require a `Scope` — the pool is torn down when the enclosing
 
 ### Layer.effect Absorbs the Scope
 
-**v4 removed `Layer.scoped`** — scoped acquisition merged into `Layer.effect`, which supplies
+**v4 removed `Layer.scoped`**. Scoped acquisition merged into `Layer.effect`, which supplies
 the layer's `Scope` and excludes it from the layer's requirements. Put the `acquireRelease`
 inside the service's `make`:
 
@@ -287,7 +287,7 @@ export class DatabasePool extends Context.Service<DatabasePool>()("DatabasePool"
         }
     }),
 }) {
-    // Layer.effect handles the Scope — no Layer.scoped needed
+    // Layer.effect handles the Scope, no Layer.scoped needed
     static readonly layer = Layer.effect(this, this.make)
 }
 ```
@@ -310,14 +310,14 @@ const InfraLive = Layer.mergeAll(
 ```
 
 Because v4 memoizes layers across `Effect.provide` calls, a scoped layer used in two places is
-built — and torn down — once. Use `Layer.fresh` or `Effect.provide(layer, { local: true })`
+built once, and torn down once. Use `Layer.fresh` or `Effect.provide(layer, { local: true })`
 when you deliberately need independent resources. See `layer-patterns.md`.
 
-> See also: `layer-patterns.md` — for `Layer.mergeAll`, `Layer.provideMerge`, and dependency wiring
+> See also: `layer-patterns.md` for `Layer.mergeAll`, `Layer.provideMerge`, and dependency wiring
 
 ## Resource Timeouts
 
-v4 renamed `Effect.timeoutFail` to `Effect.timeoutOrElse`, and the fallback is an **Effect** —
+v4 renamed `Effect.timeoutFail` to `Effect.timeoutOrElse`, and the fallback is an **Effect**, so
 wrap the error in `Effect.fail`.
 
 ### Acquisition Timeout
@@ -405,10 +405,10 @@ const result = await Effect.runPromise(
 ```typescript
 import { ManagedRuntime } from "effect"
 
-// Create runtime once — layers stay alive
+// Create runtime once, layers stay alive
 const runtime = ManagedRuntime.make(AppLive)
 
-// Use for multiple requests — layers are shared
+// Use for multiple requests, layers are shared
 server.get("/users", async (req, res) => {
     const result = await runtime.runPromise(handleGetUsers(req))
     res.json(result)
@@ -419,13 +419,13 @@ server.post("/users", async (req, res) => {
     res.json(result)
 })
 
-// Dispose when server shuts down — runs all layer finalizers
+// Dispose when server shuts down, runs all layer finalizers
 process.on("SIGTERM", () => runtime.dispose())
 ```
 
 **v4 changes to `ManagedRuntime`:**
 
-- It is **no longer an `Effect`** — you cannot `yield*` the runtime itself. Call its run methods,
+- It is **no longer an `Effect`**, so you cannot `yield*` the runtime itself. Call its run methods,
   or use `contextEffect` when you need the built context inside an Effect.
 - `runtime.runtimeEffect` / `runtime.runtime` were renamed to `contextEffect` / `context`.
 - `ManagedRuntime.make(layer, { memoMap })` accepts a shared memo map.
@@ -462,7 +462,7 @@ The `Runtime` module now contains only `Teardown`, `defaultTeardown`, and `makeR
 
 | API | Import | Purpose |
 |-----|--------|---------|
-| `Effect.acquireRelease(acquire, release, opts?)` | `Effect` | Bracket pattern — guaranteed cleanup |
+| `Effect.acquireRelease(acquire, release, opts?)` | `Effect` | Bracket pattern, guaranteed cleanup |
 | `Effect.scoped` | `Effect` | Create scope for resource lifetime |
 | `Effect.addFinalizer(fn)` | `Effect` | Register cleanup in current scope |
 | `Scope.provide(scope)` | `Scope` | Provide a scope without closing it (v3: `Scope.extend`) |
@@ -472,9 +472,9 @@ The `Runtime` module now contains only `Teardown`, `defaultTeardown`, and `makeR
 | `Layer.effect` | `Layer` | Build layer, scoped or not (v3: `Layer.scoped`) |
 | `Layer.fresh(layer)` | `Layer` | Bypass shared memoization |
 | `ManagedRuntime.make(layer, opts?)` | `ManagedRuntime` | Long-lived runtime sharing layers |
-| `runtime.runPromise(effect)` | — | Run effect in managed runtime |
-| `runtime.contextEffect` | — | Built context as an Effect (v3: `runtimeEffect`) |
-| `runtime.dispose()` | — | Tear down runtime and run finalizers |
+| `runtime.runPromise(effect)` | n/a | Run effect in managed runtime |
+| `runtime.contextEffect` | n/a | Built context as an Effect (v3: `runtimeEffect`) |
+| `runtime.dispose()` | n/a | Tear down runtime and run finalizers |
 | `Effect.timeoutOrElse({ duration, onTimeout })` | `Effect` | Timeout with a fallback Effect (v3: `timeoutFail`) |
 | `Effect.runForkWith(services)` | `Effect` | Run with a prebuilt `Context` (v3: `Runtime.runFork`) |
 | `NodeRuntime.runMain(effect)` | `@effect/platform-node` | Entry point with SIGINT/SIGTERM handling |

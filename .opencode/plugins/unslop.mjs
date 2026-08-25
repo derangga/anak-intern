@@ -1,4 +1,4 @@
-// unslop — OpenCode plugin.
+// unslop, an OpenCode plugin.
 //
 // Appends the unslop ruleset to the system prompt every turn, and registers
 // this repo's skills/ directory so bro, presenterm, design-thinking, and

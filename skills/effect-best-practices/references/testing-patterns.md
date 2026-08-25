@@ -1,6 +1,6 @@
 # Testing Patterns
 
-> Effect v4. Tests use `@effect/vitest` — `it.effect` for Effect-returning tests, `assert`
+> Effect v4. Tests use `@effect/vitest`, with `it.effect` for Effect-returning tests and `assert`
 > rather than Vitest's `expect`.
 
 ## Test Runner Basics
@@ -28,7 +28,7 @@ describe("UserService", () => {
 
 Rules that come with this runner:
 
-- **`it.effect` and `it.live` already provide and close a `Scope`** per test — do not wrap test
+- **`it.effect` and `it.live` already provide and close a `Scope`** per test, so do not wrap test
   bodies in `Effect.scoped`.
 - **Use `assert`, not `expect`.** `@effect/vitest` re-exports everything from Vitest, so the
   import is one line either way; `assert` is the convention.
@@ -44,11 +44,11 @@ method with `Effect.fn`.
 
 **Why a service layer rather than a bare object literal:**
 
-1. **Same context slot** — the mock satisfies exactly the slot production code yields from.
-2. **Tracing preserved** — `Effect.fn` wrappers keep span names in test runs, making slow or
+1. **Same context slot.** The mock satisfies exactly the slot production code yields from.
+2. **Tracing preserved.** `Effect.fn` wrappers keep span names in test runs, making slow or
    flaky tests debuggable.
-3. **Typed errors** — the mock can surface the same `Schema.TaggedError` types as production.
-4. **Isolation** — each `Effect.provide(UserService.layerTest)` call builds a fresh `Map`.
+3. **Typed errors.** The mock can surface the same `Schema.TaggedError` types as production.
+4. **Isolation.** Each `Effect.provide(UserService.layerTest)` call builds a fresh `Map`.
 
 ### Correct Pattern
 
@@ -106,32 +106,32 @@ it.effect("creates then finds a user", () =>
 )
 ```
 
-A separate mock class reusing the identifier string also works — context lookup is by the
+A separate mock class reusing the identifier string also works, because context lookup is by the
 identifier, so `class UserServiceInMemory extends Context.Service<UserService>()("UserService", ...)`
 lands in the same slot. Prefer `layerTest` anyway: the string match is an unchecked convention
 that a typo breaks silently.
 
-Note that accessors are gone in v4 — tests must `yield* UserService` before calling methods,
+Note that accessors are gone in v4. Tests must `yield* UserService` before calling methods,
 just like production code.
 
 ### Wrong Pattern
 
 ```typescript
-// WRONG — bare object literal, no tracing, no typed errors
+// WRONG: bare object literal, no tracing, no typed errors
 const UserServiceTest = Layer.succeed(UserService, {
     findById: (id) => Effect.succeed({ id, name: "Test", email: "t@test.com" }),
     create: (input) => Effect.succeed({ id: "1", ...input }),
 })
 ```
 
-`Layer.succeed` with `Service.of(...)` is fine for a **static** stub with no state — see
+`Layer.succeed` with `Service.of(...)` is fine for a **static** stub with no state. See
 `layer-patterns.md`. It's the wrong tool once the mock has to remember anything.
 
 ---
 
 ## Asserting on Tagged Errors with Exit/Cause
 
-**Use `Effect.exit`** to capture failures as values. Never assert with `.rejects.toThrow()` — it
+**Use `Effect.exit`** to capture failures as values. Never assert with `.rejects.toThrow()`. It
 converts the error to a plain `Error`, discarding `_tag` and all context fields.
 
 ### Exit Inspection APIs
@@ -143,7 +143,7 @@ converts the error to a plain `Error`, discarding `_tag` and all context fields.
 | `Exit.isSuccess(exit)` | `true` if the Exit is a success |
 | `exit.value` | Success value (valid after `Exit.isSuccess` check) |
 | `exit.cause` | `Cause<E>` (valid after `Exit.isFailure` check) |
-| `Cause.findErrorOption(cause)` | `Option<E>` — `Some(err)` for typed failures, `None` for defects |
+| `Cause.findErrorOption(cause)` | `Option<E>`, `Some(err)` for typed failures, `None` for defects |
 | `error._tag` | Discriminant on `Schema.TaggedError` to identify error type |
 
 `Cause.failureOption` was renamed to `Cause.findErrorOption` in v4. See the flattened `Cause`
@@ -178,11 +178,11 @@ it.effect("fails with UserNotFoundError including userId context", () =>
 ### Wrong Pattern
 
 ```typescript
-// WRONG — loses _tag, userId, and all Schema.TaggedError context fields
+// WRONG: loses _tag, userId, and all Schema.TaggedError context fields
 it("fails when user not found", async () => {
     await expect(
         Effect.runPromise(program.pipe(Effect.provide(UserService.layerTest))),
-    ).rejects.toThrow() // Only checks that *something* threw — not which error
+    ).rejects.toThrow() // Only checks that *something* threw, not which error
 })
 ```
 
@@ -195,11 +195,11 @@ file imports this shared layer. Per-test overrides use `TestLive.pipe(Layer.prov
 
 **Why a shared layer matters:**
 
-1. **Single source of truth** — adding a new mock requires one change in `setup.ts`, not a hunt
+1. **Single source of truth.** Adding a new mock requires one change in `setup.ts`, not a hunt
    through every file.
-2. **Prevents drift** — files can't accidentally omit a service or use a stale mock.
-3. **Layer memoization** — shared infrastructure (e.g., in-memory DB) is instantiated once.
-4. **Easy overrides** — one-line per-test overrides without rebuilding the full composition.
+2. **Prevents drift.** Files can't accidentally omit a service or use a stale mock.
+3. **Layer memoization.** Shared infrastructure (e.g., in-memory DB) is instantiated once.
+4. **Easy overrides.** One-line per-test overrides without rebuilding the full composition.
 
 ### Correct Pattern
 
@@ -253,8 +253,8 @@ it.layer(TestLive)("UserService", (it) => {
 
 ### Test Isolation and Memoization
 
-v4 memoizes layers across `Effect.provide` calls, which is usually what you want in tests —
-one in-memory database shared by every mock in `TestLive`. When a test needs genuinely
+v4 memoizes layers across `Effect.provide` calls, which is usually what you want in tests.
+One in-memory database is shared by every mock in `TestLive`. When a test needs genuinely
 independent resources, opt out explicitly:
 
 ```typescript
@@ -268,7 +268,7 @@ Effect.provide(TestLive, { local: true })
 ### Wrong Pattern
 
 ```typescript
-// WRONG — layer composition duplicated (and diverged) in every test file
+// WRONG: layer composition duplicated (and diverged) in every test file
 
 // test/user.test.ts
 const TestLayer = Layer.mergeAll(
@@ -277,7 +277,7 @@ const TestLayer = Layer.mergeAll(
     ProductService.layerTest,
 ).pipe(Layer.provide(InMemoryDatabaseLive))
 
-// test/order.test.ts — ProductService accidentally omitted
+// test/order.test.ts, ProductService accidentally omitted
 const TestLayer = Layer.mergeAll(
     UserService.layerTest,
     OrderService.layerTest,
@@ -300,7 +300,7 @@ const TestLayer = Layer.mergeAll(
 
 ## Controlling Time with TestClock
 
-**Never use `Date.now()` or `new Date()`** in business logic — use `Clock`, and drive it with
+**Never use `Date.now()` or `new Date()`** in business logic. Use `Clock`, and drive it with
 `TestClock` in tests. v3's `TestContext.TestContext` is gone; `it.effect` provides the test
 services automatically, and the explicit layer is
 `Layer.mergeAll(TestConsole.layer, TestClock.layer())`.
@@ -324,7 +324,7 @@ it.effect("retries three times over increasing delays", () =>
 )
 ```
 
-Note `Effect.forkChild` (v3's `Effect.fork`) and `Fiber.join` — `Fiber` is no longer an Effect
+Note `Effect.forkChild` (v3's `Effect.fork`) and `Fiber.join`. `Fiber` is no longer an Effect
 in v4, so `yield* fiber` is a type error. See `v4-semantics.md`.
 
 ---
@@ -335,14 +335,14 @@ in v4, so `yield* fiber` is a type error. See `v4-semantics.md`.
 logic.** Abstract them behind a `Context.Service` so tests can inject deterministic
 implementations.
 
-> See also: `anti-patterns.md` — [Using Impure Functions Directly in Business Logic]
+> See also: [Using Impure Functions Directly in Business Logic] in `anti-patterns.md`
 
 ### Common Impure Functions to Abstract
 
 | Impure Call | Service Abstraction | Effect Built-in |
 |-------------|--------------------|-|
-| `crypto.randomUUID()` | `IdGenerator` service | — |
-| `Math.random()` | `RandomNumber` service | — |
+| `crypto.randomUUID()` | `IdGenerator` service | none |
+| `Math.random()` | `RandomNumber` service | none |
 | `Date.now()` / `new Date()` | Use `Clock` directly | `Clock.currentTimeMillis` |
 | `fetch(url)` | `HttpClient` service | `effect/unstable/http` `HttpClient` |
 
@@ -351,7 +351,7 @@ implementations.
 ```typescript
 import { Context, Effect, Layer } from "effect"
 
-// IdGenerator — wraps crypto.randomUUID
+// IdGenerator wraps crypto.randomUUID
 export class IdGenerator extends Context.Service<IdGenerator>()("IdGenerator", {
     make: Effect.sync(() => ({
         generate: Effect.sync(() => crypto.randomUUID()),
@@ -360,7 +360,7 @@ export class IdGenerator extends Context.Service<IdGenerator>()("IdGenerator", {
     static readonly layer = Layer.effect(this, this.make)
 }
 
-// RandomNumber — wraps Math.random
+// RandomNumber wraps Math.random
 export class RandomNumber extends Context.Service<RandomNumber>()("RandomNumber", {
     make: Effect.sync(() => ({
         next: Effect.sync(() => Math.random()),
@@ -371,7 +371,7 @@ export class RandomNumber extends Context.Service<RandomNumber>()("RandomNumber"
     static readonly layer = Layer.effect(this, this.make)
 }
 
-// Business logic depends on services — not raw globals
+// Business logic depends on services, not raw globals
 export class UserService extends Context.Service<UserService>()("UserService", {
     make: Effect.gen(function* () {
         const idGen = yield* IdGenerator
@@ -414,7 +414,7 @@ const makeTestRandomNumber = (values: number[]) => {
     })
 }
 
-// Test — provide the deterministic layers underneath the service
+// Test: provide the deterministic layers underneath the service
 it.effect("generates deterministic ids and invite codes", () =>
     Effect.gen(function* () {
         const users = yield* UserService
@@ -437,13 +437,13 @@ it.effect("generates deterministic ids and invite codes", () =>
 
 Because `UserService.layer` bakes in the production `IdGenerator.layer` and `RandomNumber.layer`,
 the test rebuilds the layer from `UserService.make` with test dependencies instead. This is the
-v4 replacement for v3's trick of piping `UserService.Default` through `Layer.provide` — the
+v4 replacement for v3's trick of piping `UserService.Default` through `Layer.provide`. The
 `make` effect is exposed as a static, so you can rewire it freely.
 
 ### Wrong Pattern
 
 ```typescript
-// WRONG — impure calls directly in business logic
+// WRONG: impure calls directly in business logic
 const createUser = (input: { name: string; email: string }) =>
     Effect.gen(function* () {
         const id = crypto.randomUUID()                              // Non-deterministic

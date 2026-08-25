@@ -33,20 +33,20 @@ graph. If the code doesn't match the graph, something is wrong.
 
 ## How much of this to run
 
-The ten sections are not equal. **Four carry the method** — run them on every
+The ten sections are not equal. **Four carry the method.** Run them on every
 change that writes code, however small:
 
 | §   | always run               | because                                                              |
 | --- | ------------------------ | -------------------------------------------------------------------- |
-| §4  | **E** — retry/escape/die | the decision code skips by default; everything becomes catch-and-log |
-| §5  | **R** — what it needs    | the difference between a dependency and a hidden one                 |
+| §4  | **E**, retry/escape/die  | the decision code skips by default; everything becomes catch-and-log |
+| §5  | **R**, what it needs     | the difference between a dependency and a hidden one                 |
 | §9  | **swap R**               | you can see whether it is testable before writing a test             |
 | §10 | **gen = A, pipe = E**    | the only one you can check by looking at the finished code           |
 
-Two are prerequisites — you cannot annotate a graph you have not drawn, but
+Two are prerequisites. You cannot annotate a graph you have not drawn, but
 drawing it is rarely where the insight is. Do them fast and do not linger:
 
-- **§1 shapes** and **§2 A** — usually already answered by the existing code.
+- **§1 shapes** and **§2 A** are usually already answered by the existing code.
 
 Four fire on a trigger. No trigger, skip it:
 
@@ -58,7 +58,7 @@ Four fire on a trigger. No trigger, skip it:
 | §8  | a node acquires something that must be released  |
 
 **This is a priority order, not permission to skip.** Skipping one of those four
-is a claim that its trigger is absent — if you cannot say why §6 does not apply,
+is a claim that its trigger is absent. If you cannot say why §6 does not apply,
 it applies.
 
 ### Depth per change
@@ -66,8 +66,8 @@ it applies.
 | the change                                           | run                                                                     |
 | ---------------------------------------------------- | ----------------------------------------------------------------------- |
 | introduces shapes or failure modes that didn't exist | §1–§2 to draw it, the four to annotate it, plus triggers                |
-| only adds call sites for shapes that already exist   | the four — §1–§2 are already answered by the code                       |
-| doesn't touch data flow, only what a person is shown | `references/design-graph.md` — the same method, turned on the interface |
+| only adds call sites for shapes that already exist   | the four, §1–§2 are already answered by the code                        |
+| doesn't touch data flow, only what a person is shown | `references/design-graph.md`, the same method turned on the interface   |
 
 Torn between two depths → run the deeper one. The pass is cheap; a graph
 discovered halfway through the code is not.
@@ -79,11 +79,11 @@ in that project's instructions, not here.
 
 What are the things? Before drawing a graph, define the domain language.
 
-- **Records** — entities that flow through nodes. A User, a Product, an Order.
-- **IDs** — identity of things. Branded, constrained, never a bare string.
-- **Variants** — internal state transitions. A step is Continue or Finished. A
+- **Records.** Entities that flow through nodes. A User, a Product, an Order.
+- **IDs.** Identity of things. Branded, constrained, never a bare string.
+- **Variants.** Internal state transitions. A step is Continue or Finished. A
   status is Pending, Active, or Cancelled.
-- **Errors** — named failure modes. Not strings. Tagged, structured, carrying
+- **Errors.** Named failure modes. Not strings. Tagged, structured, carrying
   context.
 
 These are the nouns. The graph is the verbs. You cannot draw the graph until you
@@ -93,16 +93,16 @@ know what flows through it.
 
 Map the happy path as a call graph before writing any code. What goes in, what
 comes out, what transforms happen in between. This graph IS the program
-structure — the code follows it, not the other way round.
+structure. The code follows it, not the other way round.
 
 ## 3. One or many?
 
 Is each node one-shot or a flow?
 
-- **One value** — the node runs, produces A, done. This is `Effect`.
-- **Many values over time** — the node emits A repeatedly. Events,
+- **One value.** The node runs, produces A, done. This is `Effect`.
+- **Many values over time.** The node emits A repeatedly. Events,
   subscriptions, paginated pulls. This is `Stream`.
-- **Time-bounded** — the result is valid for a window. Cache it. Deduplicate
+- **Time-bounded.** The result is valid for a window. Cache it. Deduplicate
   concurrent lookups.
 
 Same three channels in all cases, different cardinality. Mark it on the graph so
@@ -112,11 +112,11 @@ the code matches.
 
 Mark where the graph can break. Each break point is one of three things:
 
-- **Retry** — transient failure, try again. Network timeout, rate limit,
+- **Retry.** Transient failure, try again. Network timeout, rate limit,
   connection reset.
-- **Escape hatch** — recoverable, return an alternative. Fallback value, cached
+- **Escape hatch.** Recoverable, return an alternative. Fallback value, cached
   result, default.
-- **Die** — a bug in your own code, not a failure of the world. The program
+- **Die.** A bug in your own code, not a failure of the world. The program
   assumed something that turned out false. NOT a domain error.
 
 Errors are VALUES in the E channel until you truly cannot handle them. They flow
@@ -128,7 +128,7 @@ it propagate. Only `die` when the program's assumptions are violated.
 Mark what each node needs to exist. "We cannot do X if we don't have Y."
 
 R is compile-time proof that dependencies are satisfied. Every node declares
-what it requires — a connection, a config value, an HTTP client. R shrinks as
+what it requires: a connection, a config value, an HTTP client. R shrinks as
 layers are provided; when R is `never`, the program can run. A missing service
 is a type error that names it.
 
@@ -149,7 +149,7 @@ What wraps a node without changing what it does? Retry policies, timeouts,
 spans, logging, caching.
 
 These wrap via `.pipe()` WITHOUT changing the core graph. The happy path stays
-readable — no wading through retry config to find what the function does. Each
+readable, with no wading through retry config to find what the function does. Each
 wrapper can be added or removed on its own: the graph says WHAT happens, the
 wrappers say HOW it behaves under pressure.
 
@@ -158,7 +158,7 @@ wrappers say HOW it behaves under pressure.
 What nodes acquire something that must be released? Connections, file handles,
 subscriptions, listeners, child processes.
 
-Acquire/release is a type guarantee. If a node opens it, scope closes it — even
+Acquire/release is a type guarantee. If a node opens it, scope closes it, even
 on error, even on interrupt. Cleanup is structural, not a TODO someone
 remembers.
 
@@ -171,16 +171,16 @@ behind R. If the graph can't run with a test R, the design has hidden
 dependencies. If you have to mock the world to test one node, the node is doing
 too much.
 
-This is the payoff of separating A, E and R — you prove the graph correct by
+This is the payoff of separating A, E and R. You prove the graph correct by
 swapping what sits behind R.
 
 ## 10. gen is A, pipe is E
 
 §2 and §4 map directly onto code structure:
 
-- **`Effect.gen` body** — the happy path. Every `yield*` is an A flowing through
+- **`Effect.gen` body.** The happy path. Every `yield*` is an A flowing through
   the graph. No error handling inside.
-- **`.pipe()` after gen** — the complete E enumeration. Read the actual E type of
+- **`.pipe()` after gen.** The complete E enumeration. Read the actual E type of
   every yielded effect before writing it; the pipe catches, retries or
   transforms every E the body can produce.
 
@@ -198,12 +198,12 @@ split exists.
 ## Emit the graph before the code
 
 The answers get **written into the reply** before any code exists. A graph that
-was only thought is unverifiable — neither you nor the reader can tell a design
+was only thought is unverifiable. Neither you nor the reader can tell a design
 pass from a claim of one.
 
 Notation: steps at the left margin prefixed `->`, nodes indented beneath the step
 they belong to, `R:` and `E:` riding the node line they annotate. Horizontal
-chains (`F1(A) -> F2(A) -> F3(A)`) are banned — they wrap badly in a terminal.
+chains (`F1(A) -> F2(A) -> F3(A)`) are banned. They wrap badly in a terminal.
 The graph grows down the page, not across it.
 
 ```
@@ -216,7 +216,7 @@ shapes: OrderId (branded), Order, OrderNotFound, TransportError
   -> list surface                                E: OrderNotFound -> empty state
 ```
 
-The sketch is what the first failing test asserts against — the `E:` column
+The sketch is what the first failing test asserts against. The `E:` column
 enumerates the failure tests, the shapes give the decode tests. It lives in the
 reply only; never commit it as a comment header, where it rots the moment the
 code moves.
@@ -224,12 +224,12 @@ code moves.
 ### Call graphs of existing code
 
 **One notation, two uses.** The same `->` sketch traces code that already
-exists — architecture summaries, project overviews, explaining a flow. Keep the
+exists: architecture summaries, project overviews, explaining a flow. Keep the
 `R:` and `E:` columns: a bare tree of names says only what calls what, while the
 annotations say what each node needs and how it breaks. That is the whole
 difference between a diagram and a design.
 
-Production and tests get separate sections when they differ — the contrast is §9
+Production and tests get separate sections when they differ. The contrast is §9
 made visible, the same graph shape with a different R behind it:
 
 ```
@@ -242,7 +242,7 @@ production
 ```
 
 ```
-tests — same graph, R swapped
+tests: same graph, R swapped
 
 -> handle request               R: HttpServer
   -> OrderService.place         R: Database.layerMemory
@@ -251,7 +251,7 @@ tests — same graph, R swapped
 ```
 
 If the two graphs differ by anything except what sits behind `R:`, the design
-has a hidden dependency — that is §9 failing, reported as a drawing.
+has a hidden dependency. That is §9 failing, reported as a drawing.
 
 Plain text only, no rendered diagrams.
 

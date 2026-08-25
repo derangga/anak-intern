@@ -125,8 +125,8 @@ v4 consolidated the metric mutators. `Metric.increment` / `set` / `decrement` ar
 | v3 | v4 |
 | --- | --- |
 | `Metric.increment(counter)` | `Metric.update(counter, 1)` |
-| `Metric.set(gauge, v)` | `Metric.update(gauge, v)` — absolute value |
-| `Metric.decrement(gauge)` | `Metric.modify(gauge, -1)` — delta |
+| `Metric.set(gauge, v)` | `Metric.update(gauge, v)`, absolute value |
+| `Metric.decrement(gauge)` | `Metric.modify(gauge, -1)`, delta |
 | `Metric.tagged(k, v)` | `Metric.withAttributes(metric, { [k]: v })` |
 | `Metric.timerWithHistogram(h)` | `Metric.timer(name, options)` |
 
@@ -226,7 +226,7 @@ const config = Config.all({
     env: Config.literals(["development", "staging", "production"], "NODE_ENV"),
 })
 
-// Use in a layer — Layer.unwrapEffect became Layer.unwrap
+// Use in a layer. Layer.unwrapEffect became Layer.unwrap
 const ServerLive = Layer.unwrap(
     Effect.gen(function* () {
         const { port, host, env } = yield* config
@@ -260,9 +260,9 @@ const dbConfig = Config.all({
 })
 ```
 
-The check's own annotations carry the failure message —
-`Schema.isGreaterThan(0, { description: "Max connections must be positive" })` — replacing v3's
-`{ message, validation }` pair.
+The check's own annotations carry the failure message, as in
+`Schema.isGreaterThan(0, { description: "Max connections must be positive" })`. That replaces
+v3's `{ message, validation }` pair.
 
 ### Redacted Config
 
@@ -287,7 +287,7 @@ const program = Effect.gen(function* () {
 })
 ```
 
-v3's `Config.secret` was removed — `Config.redacted` already returns `Redacted<string>`. To
+v3's `Config.secret` was removed. `Config.redacted` already returns `Redacted<string>`. To
 redact an existing config value, use `Config.map(config, Redacted.make)`.
 
 ### Config with Nested Structure
@@ -309,7 +309,7 @@ const appConfig = Config.all({
 })
 ```
 
-Use `Config.nested` to compose lookup path prefixes — parsing no longer takes a public path
+Use `Config.nested` to compose lookup path prefixes. Parsing no longer takes a public path
 prefix argument.
 
 ## Log Level Configuration
@@ -331,7 +331,7 @@ const LogLevelLive = Layer.unwrap(
 )
 ```
 
-`Config.logLevel(name)` parses and validates the literal for you — no manual lookup table.
+`Config.logLevel(name)` parses and validates the literal for you, with no manual lookup table.
 
 For production JSON logging, `Logger.json` was replaced by `Logger.layer`, which **replaces**
 the active logger set. Include `Logger.tracerLogger` to keep v3's built-in behavior of emitting
@@ -348,8 +348,8 @@ const PrettyLoggerLive = Logger.layer([Logger.consolePretty(), Logger.tracerLogg
 
 Omit `tracerLogger` only when you intentionally want trace log events disabled.
 
-Other v3 `FiberRef`-based knobs are now `References` too — `References.CurrentLogLevel`,
-`References.CurrentLogAnnotations`, `References.TracerEnabled` — all set with
+Other v3 `FiberRef`-based knobs are now `References` too. `References.CurrentLogLevel`,
+`References.CurrentLogAnnotations`, and `References.TracerEnabled` are all set with
 `Effect.provideService` or a `Layer.succeed`. See `v4-semantics.md`.
 
 ## Combining Observability
@@ -396,5 +396,5 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
 })
 ```
 
-`Clock.currentTimeMillis` is yieldable directly — `Effect.clockWith((c) => c.currentTimeMillis)`
+`Clock.currentTimeMillis` is yieldable directly. `Effect.clockWith((c) => c.currentTimeMillis)`
 still works but is unnecessary here.

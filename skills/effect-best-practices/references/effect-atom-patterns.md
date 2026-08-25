@@ -3,7 +3,7 @@
 Effect Atom is a reactive state management library that integrates with Effect-TS. It provides atoms (reactive containers), automatic dependency tracking, and seamless React integration.
 
 > **Effect v4 changes.** The React package is **`@effect/atom-react`** (v3: `@effect-atom/atom-react`),
-> and it no longer re-exports the core modules — `Atom` and `AsyncResult` are imported from
+> and it no longer re-exports the core modules. `Atom` and `AsyncResult` are imported from
 > **`effect/unstable/reactivity`**. v3's `Result` is now `AsyncResult`, and the chainable
 > `Result.builder` has been **removed**.
 
@@ -17,10 +17,10 @@ Effect Atom is a reactive state management library that integrates with Effect-T
 ## Imports at a Glance
 
 ```typescript
-// Core atom + result modules — from effect
+// Core atom + result modules, from effect
 import { Atom, AsyncResult } from "effect/unstable/reactivity"
 
-// React bindings — from the framework package
+// React bindings, from the framework package
 import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
 ```
 
@@ -213,7 +213,7 @@ const handleSubmit = async () => {
 ```
 
 **Why this is preferred:**
-- Single source of truth — loading state lives on the AsyncResult
+- Single source of truth, loading state lives on the AsyncResult
 - No `finally` blocks or manual state resets
 - Automatically synchronized with the mutation lifecycle
 
@@ -269,7 +269,7 @@ function PaywallPage() {
 
 ### reactivityKeys for Cache Invalidation
 
-Mutations can specify `reactivityKeys` to automatically invalidate queries that share the same keys — no manual `refresh()` calls needed.
+Mutations can specify `reactivityKeys` to automatically invalidate queries that share the same keys, with no manual `refresh()` calls needed.
 
 ```typescript
 // Mutation atom with reactivityKeys
@@ -280,7 +280,7 @@ const archivePaywallMutation = Atom.make(
     { reactivityKeys: ["paywalls"] }
 )
 
-// Query atom with matching reactivityKeys — auto-invalidated after mutation
+// Query atom with matching reactivityKeys, auto-invalidated after mutation
 const paywallsAtom = Atom.make(
     Effect.fn(function* () {
         return yield* paywallService.list()
@@ -310,7 +310,7 @@ const userAtom = Atom.make(
 ) // Type: Atom<AsyncResult<User, Error>>
 ```
 
-`AsyncResult` has three states — `Initial`, `Success`, `Failure` — plus a `waiting` flag that is
+`AsyncResult` has three states, `Initial`, `Success`, and `Failure`, plus a `waiting` flag that is
 orthogonal to all three (a `Success` can be `waiting: true` while it refreshes).
 
 ### Rendering with AsyncResult.match
@@ -332,7 +332,7 @@ function UserProfile() {
 }
 ```
 
-Each handler receives the **variant**, not the bare value — so success is `success.value`.
+Each handler receives the **variant**, not the bare value, so success is `success.value`.
 
 ### Typed Errors with AsyncResult.matchWithError
 
@@ -466,7 +466,7 @@ const themeAtom = Atom.kvs({
 })
 ```
 
-Note `Schema.Literals([...])` with an array — v4 made the multi-literal constructor take one
+Note `Schema.Literals([...])` with an array. v4 made the multi-literal constructor take one
 array argument, and `Schema.Literal` now takes exactly one value.
 
 ## Anti-Patterns

@@ -10,7 +10,7 @@ This skill enforces opinionated, consistent patterns for Effect-TS codebases. Th
 
 ## Version: Effect v4
 
-This skill targets **Effect v4** (`4.0.0-rc.109` at time of writing). v4 is installed from the `rc` tag — npm's `latest` still points at v3:
+This skill targets **Effect v4** (`4.0.0-rc.109` at time of writing). v4 is installed from the `rc` tag. npm's `latest` still points at v3:
 
 ```bash
 pnpm add effect@rc
@@ -21,7 +21,7 @@ Two things that follow from v4 and shape everything below:
 - **Package consolidation.** `@effect/platform`, `@effect/rpc`, `@effect/cluster`, and `@effect/workflow` merged into core `effect`. Their modules now live under `effect/unstable/*`. Packages that remain separate: `@effect/platform-*`, `@effect/sql-*`, `@effect/ai-*`, `@effect/atom-*`, `@effect/opentelemetry`, `@effect/vitest`.
 - **Single version number.** Every `effect` / `@effect/*` package shares one version. If you're on `effect@4.0.0-rc.109`, so is `@effect/sql-pg`.
 
-**Migrating an existing v3 codebase?** Use the official `effect-v3-to-v4` skill — it drives the migration from the generated rename reference in the Effect repo. Don't hand-migrate from this file.
+**Migrating an existing v3 codebase?** Use the official `effect-v3-to-v4` skill. It drives the migration from the generated rename reference in the Effect repo. Don't hand-migrate from this file.
 
 See `references/v4-semantics.md` for the v4 behavior changes that break v3 muscle memory (Yieldable, structural equality, fiber keep-alive, unstable-module policy).
 
@@ -108,7 +108,7 @@ See `references/language-server.md` for configuration options and CLI tools.
 
 ## Service Definition Pattern
 
-**Always use `Context.Service`** for business logic services. v4 removed `Effect.Service`, `Context.Tag`, `Context.GenericTag`, and `Effect.Tag` — `Context.Service` replaces all four.
+**Always use `Context.Service`** for business logic services. v4 removed `Effect.Service`, `Context.Tag`, `Context.GenericTag`, and `Effect.Tag`. `Context.Service` replaces all four.
 
 ```typescript
 import { Context, Effect, Layer } from 'effect'
@@ -151,9 +151,9 @@ const program = Effect.gen(function* () {
 const MainLive = Layer.mergeAll(UserService.layer, OtherService.layer)
 ```
 
-**What changed from v3:** `effect:` → `make:`; no auto-generated `Default` layer (write `static layer`); no `dependencies` array (use `Layer.provide`); no `accessors: true` (accessors were removed — they erased generics and overloads).
+**What changed from v3:** `effect:` → `make:`; no auto-generated `Default` layer (write `static layer`); no `dependencies` array (use `Layer.provide`); no `accessors: true` (accessors were removed because they erased generics and overloads).
 
-**Services without `make`** are bare context keys — the v4 replacement for `Context.Tag`. Use them for infrastructure injected at runtime (Cloudflare KV, worker bindings) and provide with `Effect.provideService`.
+**Services without `make`** are bare context keys, the v4 replacement for `Context.Tag`. Use them for infrastructure injected at runtime (Cloudflare KV, worker bindings) and provide with `Effect.provideService`.
 
 See `references/service-patterns.md` for detailed patterns.
 
@@ -179,7 +179,7 @@ export class UserCreateError extends Schema.TaggedError<UserCreateError>()('User
 }).pipe(HttpApiSchema.status(400)) {}
 ```
 
-v3's `HttpApiSchema.annotations({ status: 404 })` is gone — status is applied with `HttpApiSchema.status(404)` through `.pipe`.
+v3's `HttpApiSchema.annotations({ status: 404 })` is gone. Status is applied with `HttpApiSchema.status(404)` through `.pipe`.
 
 **Error handling - use `catchTag`/`catchTags`** (both unchanged in v4):
 
@@ -207,7 +207,7 @@ yield *
   )
 ```
 
-Note the v4 renames in this family: `catchAll` → `catch`, `catchAllCause` → `catchCause`, `catchAllDefect` → `catchDefect`, `catchSome` → `catchFilter`. The blanket `Effect.catch` is still the thing to avoid — it discards type information exactly as `catchAll` did.
+Note the v4 renames in this family: `catchAll` → `catch`, `catchAllCause` → `catchCause`, `catchAllDefect` → `catchDefect`, `catchSome` → `catchFilter`. The blanket `Effect.catch` is still the thing to avoid. It discards type information exactly as `catchAll` did.
 
 ### Prefer Explicit Over Generic Errors
 
@@ -350,11 +350,11 @@ const insert = Effect.fn('TweetRepo.insert')(
 )
 ```
 
-Read the actual E type of every yielded effect before writing the transform — the pipe is a complete enumeration, not a guess.
+Read the actual E type of every yielded effect before writing the transform. The pipe is a complete enumeration, not a guess.
 
 **Scope E per layer.** Each layer catches what _it_ received and produces its own error: a service turns `SqlError` into `PersistenceError`, a handler turns `PersistenceError` into a response. Consumers stay ignorant of errors from three layers down.
 
-**Divergent strategies** are the one case for handling errors inside the gen body — two yields needing different failure semantics, one failing hard while the other falls back, where the outer transform cannot tell which yield failed. Handle that single effect inline and mark it:
+**Divergent strategies** are the one case for handling errors inside the gen body: two yields needing different failure semantics, one failing hard while the other falls back, where the outer transform cannot tell which yield failed. Handle that single effect inline and mark it:
 
 ```typescript
 yield *
@@ -415,7 +415,7 @@ const MainLive = DatabaseLive.pipe(
 - **TypeScript performance**: deep `Layer.provide` nesting creates complex recursive types that slow the LSP. `Layer.mergeAll` and `Layer.provideMerge` produce flatter types.
 - **Resource management**: scoped layers properly share and clean up resources.
 
-**v4 change:** layers are now memoized *across* `Effect.provide` calls (v3 memoized only within one call, so overlapping layers were silently built twice). Composition is still the recommendation — the shared memo map is a safety net, not a substitute. Opt out with `Layer.fresh` or `Effect.provide(layer, { local: true })` when you genuinely want a separate instance.
+**v4 change:** layers are now memoized *across* `Effect.provide` calls (v3 memoized only within one call, so overlapping layers were silently built twice). Composition is still the recommendation. The shared memo map is a safety net, not a substitute. Opt out with `Layer.fresh` or `Effect.provide(layer, { local: true })` when you genuinely want a separate instance.
 
 See `references/layer-patterns.md` for testing layers, config-dependent layers, and the `layerConfig` pattern.
 
@@ -438,7 +438,7 @@ const name = Option.getOrElse(maybeName, () => 'Anonymous')
 const upperName = Option.map(maybeName, (n) => n.toUpperCase())
 ```
 
-`Option` is still `Yieldable` in v4 — `yield* Option.some(1)` works in a gen. It is no longer an `Effect` subtype, so passing it to a combinator needs `.asEffect()`. See `references/v4-semantics.md`.
+`Option` is still `Yieldable` in v4, so `yield* Option.some(1)` works in a gen. It is no longer an `Effect` subtype, so passing it to a combinator needs `.asEffect()`. See `references/v4-semantics.md`.
 
 ## Effect Atom (Frontend State)
 
@@ -529,7 +529,7 @@ const isLoading = result.waiting // Updates automatically, no useState/finally n
 
 **Dialog ownership:** Move mutation logic into dialog components. Dialog owns the mutation hook, loading state, and toasts. Parent provides data props and an `onSuccess` callback.
 
-**Cache invalidation:** Use `reactivityKeys` on both mutation and query atoms to auto-invalidate queries after mutations — replaces manual `refresh()` calls.
+**Cache invalidation:** Use `reactivityKeys` on both mutation and query atoms to auto-invalidate queries after mutations, replacing manual `refresh()` calls.
 
 See `references/effect-atom-patterns.md` for complete patterns including families, localStorage, mutations, and anti-patterns.
 
@@ -572,7 +572,7 @@ yield *
   )
 ```
 
-v4 fork renames: `Effect.fork` → `Effect.forkChild`, `Effect.forkDaemon` → `Effect.forkDetach`. `forkScoped` and `forkIn` keep their names; all four now take `{ startImmediately, uninterruptible }` options. `Fiber` is no longer an Effect — always `Fiber.join(fiber)`, never `yield* fiber`.
+v4 fork renames: `Effect.fork` → `Effect.forkChild`, `Effect.forkDaemon` → `Effect.forkDetach`. `forkScoped` and `forkIn` keep their names; all four now take `{ startImmediately, uninterruptible }` options. `Fiber` is no longer an Effect, so always `Fiber.join(fiber)`, never `yield* fiber`.
 
 See `references/concurrency-patterns.md` for Fork/Fiber variants, Queue, PubSub, Semaphore, Deferred, Latch, and polling patterns.
 
@@ -599,7 +599,7 @@ const result =
   )
 ```
 
-For scoped layers, v4 merged `Layer.scoped` into `Layer.effect` — it supplies and excludes the layer's `Scope` automatically.
+For scoped layers, v4 merged `Layer.scoped` into `Layer.effect`, which supplies and excludes the layer's `Scope` automatically.
 
 See `references/resource-patterns.md` for resource hierarchies, pooling, ManagedRuntime, and scoped layers.
 
@@ -610,7 +610,7 @@ See `references/resource-patterns.md` for resource hierarchies, pooling, Managed
 ```typescript
 import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi'
 
-// Define the API — .add is a method on the group and api values
+// Define the API. .add is a method on the group and api values
 const MyApi = HttpApi.make('MyApi').add(
   HttpApiGroup.make('users').add(
     HttpApiEndpoint.get('getUser', '/users/:id', {
@@ -632,9 +632,9 @@ const UsersApiLive = HttpApiBuilder.group(MyApi, 'users', (handlers) =>
 )
 ```
 
-v4 differences from v3: `HttpApiEndpoint.get(id, path, options)` replaces the tagged-template and fluent `setPath`/`setSuccess`/`addError` setters; `HttpApiBuilder.api` is now `HttpApiBuilder.layer`; `HttpApiBuilder.handler` is now `HttpApiBuilder.endpoint`; CORS moved to `HttpRouter.cors`; API-wide error and service generics were removed — declare errors per endpoint.
+v4 differences from v3: `HttpApiEndpoint.get(id, path, options)` replaces the tagged-template and fluent `setPath`/`setSuccess`/`addError` setters; `HttpApiBuilder.api` is now `HttpApiBuilder.layer`; `HttpApiBuilder.handler` is now `HttpApiBuilder.endpoint`; CORS moved to `HttpRouter.cors`; API-wide error and service generics were removed, so declare errors per endpoint.
 
-On the client side, derive a fully-typed client from the same `HttpApi` with `HttpApiClient.make(MyApi)` — every endpoint, payload, success, and typed error comes from the contract, so no manual URL strings or JSON wrappers:
+On the client side, derive a fully-typed client from the same `HttpApi` with `HttpApiClient.make(MyApi)`. Every endpoint, payload, success, and typed error comes from the contract, so no manual URL strings or JSON wrappers:
 
 ```typescript
 import { HttpApiClient } from 'effect/unstable/httpapi'

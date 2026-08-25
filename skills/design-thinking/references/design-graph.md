@@ -1,6 +1,6 @@
 # Design Graph
 
-The same method, turned on the interface. A screen is not a picture — it is a
+The same method, turned on the interface. A screen is not a picture. It is a
 node with three channels, and the layout you draw is the graph the user walks.
 
 `SKILL.md` answers what flows through the program. This answers what the person
@@ -40,17 +40,17 @@ lying.
 What are the things a person can look at? Define the interface language before
 opening the layout.
 
-- **Surfaces** — the named places a person can be looking at. A rail, a list, a
+- **Surfaces.** The named places a person can be looking at. A rail, a list, a
   detail pane, a drawer. Each one has a name and an owner.
-- **Units** — the repeated shape inside a surface. A row, a field, a metric.
+- **Units.** The repeated shape inside a surface. A row, a field, a metric.
   Named once, reused everywhere.
-- **States** — what a unit can be. Rest, hover, selected, disabled, stale.
+- **States.** What a unit can be. Rest, hover, selected, disabled, stale.
   Enumerated, not improvised at build time.
-- **Moves** — what the person can do to get somewhere else. Open, select,
+- **Moves.** What the person can do to get somewhere else. Open, select,
   dismiss, commit, undo.
 
 These are the nouns, the moves are the verbs. A design system that names colours
-but not surfaces has no vocabulary — only a palette.
+but not surfaces has no vocabulary, only a palette.
 
 ## 2. Think C first
 
@@ -68,11 +68,11 @@ Decide the cardinality of each node before its layout. Getting this wrong is the
 most expensive mistake in the graph, because it changes the shape of the
 surface, not its styling.
 
-- **One record** — a detail surface. Comfortable line length, full metadata, one
+- **One record.** A detail surface. Comfortable line length, full metadata, one
   primary action.
-- **Many records** — a list surface. Scannable, uniform rows, selection shown as
+- **Many records.** A list surface. Scannable, uniform rows, selection shown as
   a background tint. Must survive 0, 1, and 10,000.
-- **Live** — values that change while being read. Show the timestamp, never move
+- **Live.** Values that change while being read. Show the timestamp, never move
   the row under the cursor.
 
 Do not let a list masquerade as a card, and never let a live value pretend to be
@@ -83,15 +83,15 @@ static. A surface designed for the average case has no design for the real one.
 V is the void channel: every way the content can fail to be there. Each node
 enumerates its own, and each one is a designed surface, not a fallback.
 
-- **Empty** — nothing yet, and that is fine. One grey sentence saying what will
+- **Empty.** Nothing yet, and that is fine. One grey sentence saying what will
   appear here.
-- **Loading** — the shape is known, the values are not. A flat skeleton in the
+- **Loading.** The shape is known, the values are not. A flat skeleton in the
   layout the content will occupy.
-- **Partial** — some of it arrived. Show what you have and mark what is missing;
+- **Partial.** Some of it arrived. Show what you have and mark what is missing;
   never block the whole surface for one field.
-- **Error** — it broke, and the person can act. Say what failed, in their words,
+- **Error.** It broke, and the person can act. Say what failed, in their words,
   next to the thing that failed.
-- **Denied** — they may not see it. Prefer never routing them here over
+- **Denied.** They may not see it. Prefer never routing them here over
   explaining the refusal.
 
 A surface with one designed state and four undesigned ones is 20% designed. The
@@ -103,18 +103,17 @@ person meets on their worst day.
 Mark what each surface needs before it is allowed to exist. "We cannot show X if
 we do not have Y."
 
-N is the interface's version of compile-time proof. A surface declares its needs
-— a signed-in user, a selected record, a permission, a minimum viewport, a
-completed prior step — and the graph must satisfy them on the edge that reaches
-it.
+N is the interface's version of compile-time proof. A surface declares its needs.
+A signed-in user, a selected record, a permission, a minimum viewport, a
+completed prior step. The graph must satisfy them on the edge that reaches it.
 
-- **Data** — a record must be selected. No selection is a different node, not an
+- **Data.** A record must be selected. No selection is a different node, not an
   empty pane.
-- **Permission** — if they cannot act, do not draw the control at all. A
+- **Permission.** If they cannot act, do not draw the control at all. A
   disabled button is a last resort.
-- **Prior step** — step 3 requires step 2. Unreachable is better than reachable
+- **Prior step.** Step 3 requires step 2. Unreachable is better than reachable
   and broken.
-- **Viewport** — three panes need width. Below it the graph re-routes: the
+- **Viewport.** Three panes need width. Below it the graph re-routes: the
   detail becomes a drawer, not a squeeze.
 
 If a screen can be reached without its needs met, the flow graph has a hole.
@@ -126,7 +125,7 @@ Where does the person's own input enter the graph? Fields, uploads, pastes,
 drags, URLs they typed themselves.
 
 Validate at the field, not at submit. The boundary of the interface is the
-control they are touching — that is where unknown becomes trusted, and where the
+control they are touching. That is where unknown becomes trusted, and where the
 message belongs. One definition of a field gives the label, the constraint and
 the error sentence together.
 
@@ -139,7 +138,7 @@ What wraps a surface without changing what it says? Motion, focus, feedback,
 density, keyboard access, reduced-motion.
 
 These are layers around a node, never edits to it. A tint on hover, a reveal on
-entry, a ring on focus — the content graph is identical with them and without
+entry, a ring on focus. The content graph is identical with them and without
 them. If removing the animation changes what the person can learn from the
 screen, the animation was carrying content and the layout was underbuilt.
 
@@ -149,7 +148,7 @@ Which surfaces acquire the person's attention? Modals, drawers, menus, toasts,
 anything that takes the viewport or the focus ring.
 
 Attention is a resource with acquire and release. Whatever takes focus returns it
-to where it came from — on confirm, on cancel, on escape, on interrupt. Whatever
+to where it came from, on confirm, on cancel, on escape, on interrupt. Whatever
 covers the graph must name the single move that uncovers it.
 
 An overlay with no defined release is a leak: the person is left holding a
@@ -160,27 +159,27 @@ surface the graph has forgotten about.
 The flow graph does not change between the demo and the first real account. Only
 N changes. Run the graph four times and see whether it still holds:
 
-- **Day one** — nothing in the account. Every list is empty; the graph must
+- **Day one.** Nothing in the account. Every list is empty; the graph must
   still be legible.
-- **Year three** — 40,000 records, titles twice as long as the mock. Nothing may
+- **Year three.** 40,000 records, titles twice as long as the mock. Nothing may
   reflow into nonsense.
-- **Least access** — the read-only member. Which controls vanish, and does the
+- **Least access.** The read-only member. Which controls vanish, and does the
   layout survive their absence?
-- **Small and slow** — one hand, poor network, reduced motion on. The graph
+- **Small and slow.** One hand, poor network, reduced motion on. The graph
   re-routes; it does not degrade.
 
 If the design only works with ideal data it is not a design, it is a screenshot.
 
 ## 10. Markup is C, state styles are V
 
-- **the component tree** — the happy path. Every element is content flowing
+- **The component tree** is the happy path. Every element is content flowing
   through the graph. No state branching inside.
-- **the variants** — the complete V enumeration. Read the actual states the
+- **The variants** are the complete V enumeration. Read the actual states the
   surface can be in before writing them. Every one is named and styled; none is
   left to the browser default.
 
 If state handling lives inside the tree, the content path and the void path are
-tangled — you cannot read the layout without wading through conditionals, and no
+tangled. You cannot read the layout without wading through conditionals, and no
 one can tell which states were designed and which were merely reached.
 
 The tree IS the flow graph from §2. The variants ARE the void enumeration from
@@ -190,7 +189,7 @@ where the project enforces that, defer to it.
 ## One method, two materials
 
 Both columns answer the same ten questions in a different material. Anywhere
-they disagree, one of the two graphs is wrong — most often the interface,
+they disagree, one of the two graphs is wrong, most often the interface,
 because it is the one that gets drawn before it is thought.
 
 | §     | DESIGN THINKING                | DESIGN GRAPH                               |
@@ -198,10 +197,10 @@ because it is the one that gets drawn before it is thought.
 | X     | the problem to build           | the job to get done                        |
 | graph | functions and data flow        | surfaces and moves                         |
 | 1     | records, IDs, variants, errors | surfaces, units, states, moves             |
-| 2     | A — what flows                 | C — what is read and done                  |
+| 2     | A, what flows                  | C, what is read and done                   |
 | 3     | Effect or Stream               | detail, list, or live                      |
-| 4     | E — retry, escape, die         | V — empty, loading, partial, error, denied |
-| 5     | R — dependencies, proven       | N — needs, satisfied on the edge           |
+| 4     | E, retry, escape, die          | V, empty, loading, partial, error, denied  |
+| 5     | R, dependencies, proven        | N, needs, satisfied on the edge            |
 | 6     | parse at the transport edge    | validate at the field                      |
 | 7     | pipe wraps the node            | motion wraps the surface                   |
 | 8     | scope the resource             | scope the attention                        |

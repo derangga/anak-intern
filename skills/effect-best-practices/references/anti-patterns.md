@@ -59,7 +59,7 @@ yield* Effect.gen(function* () {
 ## FORBIDDEN: Effect.catch Losing Type Information
 
 ```typescript
-// FORBIDDEN — Effect.catch is v3's Effect.catchAll, renamed in v4
+// FORBIDDEN: Effect.catch is v3's Effect.catchAll, renamed in v4
 yield* someEffect.pipe(
     Effect.catch((err) =>
         Effect.fail(new GenericError({ message: "Something failed" }))
@@ -187,7 +187,7 @@ const program = Effect.gen(function* () {
     const key = Redacted.value(apiKey)  // Unwrap when needed
 })
 
-// To redact a non-string config, map it — v4 removed the Config-argument overload
+// To redact a non-string config, map it. v4 removed the Config-argument overload
 const secretNumber = Config.map(Config.int("SECRET_PORT"), Redacted.make)
 //    ^? Config<Redacted<number>>
 ```
@@ -242,7 +242,7 @@ const upperName = Option.map(maybeName, (n) => n.toUpperCase())
 ## FORBIDDEN: A Business Service Without `make` and a Wired Layer
 
 ```typescript
-// FORBIDDEN — a bare key for business logic, wired ad hoc at every call site
+// FORBIDDEN: a bare key for business logic, wired ad hoc at every call site
 export class UserService extends Context.Service<
     UserService,
     { findById: (id: UserId) => Effect.Effect<User, UserNotFoundError> }
@@ -273,20 +273,20 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 ```
 
 A service **without** `make` is still correct for infrastructure injected by the runtime
-(Cloudflare KV, worker bindings) — that's the v4 replacement for v3's `Context.Tag`. The
+(Cloudflare KV, worker bindings), which is the v4 replacement for v3's `Context.Tag`. The
 anti-pattern is using that shape for logic you construct yourself. See `service-patterns.md`.
 
 ## FORBIDDEN: Yielding Non-Effect Values
 
 ```typescript
-// FORBIDDEN in v4 — all three compiled in v3
+// FORBIDDEN in v4, all three compiled in v3
 const value = yield* ref        // Ref was an Effect subtype
 const result = yield* deferred  // Deferred was an Effect subtype
 const output = yield* fiber     // Fiber was an Effect subtype
 ```
 
 **Why:** v4 replaced Effect subtyping with the `Yieldable` trait. `Ref`, `Deferred`, and `Fiber`
-are plain values now — the ambiguity between "I have a Ref" and "I have an Effect that reads the
+are plain values now. The ambiguity between "I have a Ref" and "I have an Effect that reads the
 Ref" caused silent bugs (e.g. `Effect.all([refA, refB])` quietly reading both instead of failing
 to type-check).
 
@@ -476,7 +476,7 @@ const program = Effect.gen(function* () {
 })
 ```
 
-**Why:** `yield*` cannot be used inside `finally` blocks in generators. The cleanup effect won't execute properly. Additionally, manual cleanup is not interruption-safe — if the fiber is interrupted, the `finally` block may not run.
+**Why:** `yield*` cannot be used inside `finally` blocks in generators. The cleanup effect won't execute properly. Additionally, manual cleanup is not interruption-safe. If the fiber is interrupted, the `finally` block may not run.
 
 **Correct:**
 ```typescript
@@ -591,14 +591,14 @@ class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()(
     { id: Schema.String, message: Schema.String },
 ).pipe(HttpApiSchema.status(404)) {}
 
-// Declare the error on the endpoint — mapping is automatic
+// Declare the error on the endpoint, mapping is automatic
 const endpoint = HttpApiEndpoint.get("getUser", "/users/:id", {
     params: { id: Schema.String },
     success: UserSchema,
     error: UserNotFoundError,
 })
 
-// Handlers just fail normally — no manual mapping needed
+// Handlers just fail normally, no manual mapping needed
 const handleGetUser = HttpApiBuilder.endpoint(Api, "getUser", ({ params }) =>
     findUser(params.id) // UserNotFoundError automatically becomes 404
 )
@@ -648,7 +648,7 @@ export class OrderService extends Context.Service<OrderService>()("OrderService"
     )
 }
 
-// Callers just use the service — no dependency threading
+// Callers just use the service, no dependency threading
 const program = Effect.gen(function* () {
     const orderService = yield* OrderService
     yield* orderService.processOrder(orderId)
@@ -699,12 +699,12 @@ const TestIdGenerator = Layer.succeed(IdGenerator, {
 // FORBIDDEN
 const program = Effect.gen(function* () {
     const fiber = yield* Effect.forkChild(someEffect)
-    const result = yield* Fiber.join(fiber) // Immediately waiting — why fork?
+    const result = yield* Fiber.join(fiber) // Immediately waiting, why fork?
     return result
 })
 ```
 
-**Why:** Forking and immediately joining is equivalent to running the effect directly, but with unnecessary overhead of creating a fiber. Fork is for true concurrency — running something in the background while doing other work.
+**Why:** Forking and immediately joining is equivalent to running the effect directly, but with unnecessary overhead of creating a fiber. Fork is for true concurrency, running something in the background while doing other work.
 
 **Correct:**
 ```typescript

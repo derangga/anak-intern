@@ -68,7 +68,7 @@ margin:
   percent: 8           # percent of terminal columns; degrades better on resize
 ```
 
-Center alignment takes different keys — `minimum_size` (useful on code blocks, to extend the background past the code) and `minimum_margin` (same structure as `margin`). The two interact badly; prefer one.
+Center alignment takes different keys: `minimum_size` (useful on code blocks, to extend the background past the code) and `minimum_margin` (same structure as `margin`). The two interact badly; prefer one.
 
 ### default
 
@@ -112,7 +112,7 @@ footer:
   height: 3            # terminal rows, default 2
 ```
 
-Substitutable variables: `{current_slide}`, `{total_slides}`, and any front-matter attribute — `title`, `sub_title`, `event`, `location`, `date`, `author`. Referencing a variable that isn't set, or one that doesn't exist, is an error. Escape a literal brace by doubling it: `{{potato}}` renders as `{potato}`.
+Substitutable variables are `{current_slide}`, `{total_slides}`, and any front-matter attribute: `title`, `sub_title`, `event`, `location`, `date`, `author`. Referencing a variable that isn't set, or one that doesn't exist, is an error. Escape a literal brace by doubling it: `{{potato}}` renders as `{potato}`.
 
 Images work in any of the three positions, looked up first relative to the presentation and then relative to the themes directory. They scale to `footer.height` rows, so raise it for tall images:
 

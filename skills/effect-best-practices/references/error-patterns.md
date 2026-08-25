@@ -2,7 +2,7 @@
 
 > **Effect v4.** `Schema.TaggedError` is unchanged, but HTTP status annotations moved to
 > `.pipe(HttpApiSchema.status(n))`, `Effect.catchAll` became `Effect.catch`, and `Cause` was
-> flattened. `catchTag` / `catchTags` are unchanged — they remain the backbone of this file.
+> flattened. `catchTag` / `catchTags` are unchanged. They remain the backbone of this file.
 
 ## Why Explicit Error Types?
 
@@ -23,7 +23,7 @@ Generic errors like `BadRequestError` or `NotFoundError` seem convenient but cre
 
 ### Anti-Pattern: Generic Error Mapping
 
-> See also: `anti-patterns.md` — [Leaking Implementation Errors Across Boundaries], [Duplicating Error Handling in Every Route Handler]
+> See also: [Leaking Implementation Errors Across Boundaries] and [Duplicating Error Handling in Every Route Handler] in `anti-patterns.md`
 
 ```typescript
 // ❌ WRONG - Collapsing to generic HTTP errors
@@ -72,7 +72,7 @@ AsyncResult.matchWithError(result, {
 })
 ```
 
-See `effect-atom-patterns.md` — v3's `Result.builder(...).onErrorTag(...)` was removed in v4.
+See `effect-atom-patterns.md`. v3's `Result.builder(...).onErrorTag(...)` was removed in v4.
 
 ## Error Naming Conventions
 
@@ -361,10 +361,10 @@ export class ValidationError extends Schema.TaggedError<ValidationError>()(
 
 ### Retry Based on Error Property
 
-> See also: `anti-patterns.md` — [Manual Retry/Timeout Logic] for why manual retry loops are forbidden
+> See also: [Manual Retry/Timeout Logic] in `anti-patterns.md` for why manual retry loops are forbidden
 
 v4's `Effect.retry` takes an options object combining a schedule with `times` / `while` /
-`until` — clearer than composing schedules for the common case:
+`until`, which is clearer than composing schedules for the common case:
 
 ```typescript
 import { Effect, Schedule } from "effect"
@@ -385,12 +385,12 @@ yield* callExternalApi(request).pipe(withRetry)
 ```
 
 v3's `Schedule.whileInput` / `whileOutput` both collapsed into `Schedule.while`, and
-`Schedule.intersect` / `union` became `Schedule.max` / `Schedule.min` — but for "retry N times
+`Schedule.intersect` / `union` became `Schedule.max` / `Schedule.min`, but for "retry N times
 with backoff while X" the options object above is the direct route.
 
 ## Working with Cause
 
-v4 **flattened** `Cause`. It is no longer a recursive `Sequential`/`Parallel` tree — it's a
+v4 **flattened** `Cause`. It is no longer a recursive `Sequential`/`Parallel` tree. It's a
 wrapper around a flat array of reasons:
 
 ```typescript
@@ -401,7 +401,7 @@ interface Cause<E> {
 type Reason<E> = Fail<E> | Die | Interrupt
 ```
 
-`Empty`, `Sequential`, and `Parallel` are gone — an empty cause is an empty `reasons` array, and
+`Empty`, `Sequential`, and `Parallel` are gone. An empty cause is an empty `reasons` array, and
 multiple failures are collected into one flat array.
 
 ```typescript
@@ -422,7 +422,7 @@ const describe = (cause: Cause.Cause<AppError>) => {
 | v3 | v4 |
 | --- | --- |
 | `Cause.failureOption(cause)` | `Cause.findErrorOption(cause)` |
-| `Cause.failureOrCause(cause)` | `Cause.findError(cause)` — returns `Result`, not `Either` |
+| `Cause.failureOrCause(cause)` | `Cause.findError(cause)`, returns `Result`, not `Either` |
 | `Cause.dieOption(cause)` | `Cause.findDefect(cause)` |
 | `Cause.failures(cause)` | `cause.reasons.filter(Cause.isFailReason)` |
 | `Cause.defects(cause)` | `cause.reasons.filter(Cause.isDieReason)` |
@@ -471,7 +471,7 @@ yield* Activity.make({
 })
 ```
 
-See `rpc-cluster-patterns.md` — `Activity` now lives in `effect/unstable/workflow`.
+See `rpc-cluster-patterns.md`. `Activity` now lives in `effect/unstable/workflow`.
 
 ## HTTP Status Codes (Without Generic Errors)
 
@@ -540,7 +540,7 @@ Effect.catch((unexpectedError) =>
 ```
 
 A decode failure (`Schema.SchemaError`, v3's `ParseError`) inside a service is usually **your**
-bug rather than the caller's — prefer `Effect.die` over mapping it to a domain error, so it
+bug rather than the caller's. Prefer `Effect.die` over mapping it to a domain error, so it
 surfaces as a defect instead of a handled failure.
 
 ## Error Logging

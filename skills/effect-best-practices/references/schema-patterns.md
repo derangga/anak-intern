@@ -29,7 +29,7 @@ export const ProductId = Schema.String.check(Schema.isUUID()).pipe(Schema.brand(
 export type ProductId = Schema.Schema.Type<typeof ProductId>
 ```
 
-v3's `Schema.UUID` no longer exists as a standalone schema — it's a check on `Schema.String`.
+v3's `Schema.UUID` no longer exists as a standalone schema. It's a check on `Schema.String`.
 `Schema.isUUID(version?)` optionally pins a UUID version. `Schema.ULID` became
 `Schema.isULID()` the same way.
 
@@ -90,7 +90,7 @@ accepts several checks at once:
 // v3
 Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
 
-// v4 — one .check call, multiple checks
+// v4: one .check call, multiple checks
 Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))
 ```
 
@@ -117,7 +117,7 @@ export type UserEncoded = Schema.Schema.Encoded<typeof User>
 
 Two v4 renames above: `Schema.Literal("a", "b", "c")` became `Schema.Literals(["a", "b", "c"])`
 (one array argument; `Schema.Literal` now takes exactly one value, and `Schema.Null` replaces
-`Schema.Literal(null)`), and `Schema.DateTimeUtc` became `Schema.DateTimeUtcFromString` —
+`Schema.Literal(null)`), and `Schema.DateTimeUtc` became `Schema.DateTimeUtcFromString`.
 v4's `DateTimeUtc` is the self schema, not the string codec.
 
 ### Input Types for Mutations
@@ -134,7 +134,7 @@ export const CreateUserInput = Schema.Struct({
 
     organizationId: OrganizationId,
 
-    // v3's optionalWith({ default }) — the default is an Effect in v4
+    // v3's optionalWith({ default }), the default is an Effect in v4
     role: Schema.Literals(["admin", "member", "viewer"]).pipe(
         Schema.withDecodingDefaultType(Effect.succeed("member" as const)),
     ),
@@ -209,7 +209,7 @@ transform: `Schema.Number.check(Schema.isGreaterThan(0)).pipe(Schema.brand("Posi
 
 ### JSON Strings
 
-v4 ships this — don't hand-roll it:
+v4 ships this, so don't hand-roll it:
 
 ```typescript
 // v3: Schema.parseJson(schema)
@@ -284,8 +284,8 @@ export const CreateOrderInput = Schema.Struct({
 })
 ```
 
-Checks take their own annotations as a trailing argument —
-`Schema.isMinLength(1, { description: "..." })` — for messages tied to a specific constraint.
+Checks take their own annotations as a trailing argument, as in
+`Schema.isMinLength(1, { description: "..." })`, for messages tied to a specific constraint.
 
 ## Optional Fields
 
@@ -293,8 +293,8 @@ v4 splits v3's `optional` / `optionalWith` options into distinct combinators:
 
 | v3 | v4 |
 | --- | --- |
-| `optional(s)` | `optional(s)` — key may be absent **or** `undefined` |
-| `optional(s, { exact: true })` | `optionalKey(s)` — key may be absent, never `undefined` |
+| `optional(s)` | `optional(s)`, key may be absent **or** `undefined` |
+| `optional(s, { exact: true })` | `optionalKey(s)`, key may be absent, never `undefined` |
 | `optionalWith(s, { default })` | `s.pipe(withDecodingDefaultType(Effect.succeed(v)))` |
 | `optionalWith(s, { exact: true, default })` | `s.pipe(withDecodingDefaultTypeKey(Effect.succeed(v)))` |
 | `optionalWith(s, { nullable: true })` | `optional(NullOr(s))` + `decodeTo` filtering nulls |
@@ -317,7 +317,7 @@ export const UserPreferences = Schema.Struct({
 })
 ```
 
-The default is an **`Effect`**, not a thunk — `Effect.succeed("en")`, not `() => "en"`. Use
+The default is an **`Effect`**, not a thunk. Write `Effect.succeed("en")`, not `() => "en"`. Use
 `withDecodingDefault*` (without `Type`) when the default is expressed in `Encoded` terms rather
 than `Type` terms.
 
@@ -326,7 +326,7 @@ than `Type` terms.
 `Schema.Union` takes one array in v4:
 
 ```typescript
-// Simple union — prefer Literals for a set of literals
+// Simple union, prefer Literals for a set of literals
 export const PaymentMethod = Schema.Literals(["card", "bank_transfer", "crypto"])
 
 // Discriminated union (tagged)
@@ -429,7 +429,7 @@ const encoded = yield* encodeUser(user) // Effect<UserEncoded, SchemaError>
 
 The failure type is `Schema.SchemaError` (v3's `ParseError`), so a decode failure is caught with
 `Effect.catchTag("SchemaError", ...)`. Inside a service, a decode failure is usually **your**
-bug, not the caller's — `Effect.die` it rather than surfacing it. See `error-patterns.md`.
+bug, not the caller's, so `Effect.die` it rather than surfacing it. See `error-patterns.md`.
 
 ## Structural Field Operations
 

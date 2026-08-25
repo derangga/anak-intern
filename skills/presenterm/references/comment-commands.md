@@ -51,7 +51,7 @@ fn potato() -> u32 { 42 }
 Below both columns.
 ~~~
 
-A column stays active until the next `column`, a `reset_layout`, or the end of the slide. presenterm has no div/HTML layout — columns are the only layout primitive.
+A column stays active until the next `column`, a `reset_layout`, or the end of the slide. presenterm has no div/HTML layout, so columns are the only layout primitive.
 
 To center a block of content, define `[1, 3, 1]` and write only into column 1.
 
@@ -83,7 +83,7 @@ Paths are relative to the presentation file. Rendered at original size, downscal
 ![image:width:50%](image.png)
 ```
 
-The `image:` attribute prefix is configurable via `options.image_attributes_prefix` — set it to `""` to write `![width:50%](path.png)`.
+The `image:` attribute prefix is configurable via `options.image_attributes_prefix`. Set it to `""` to write `![width:50%](path.png)`.
 
 Requires a terminal supporting the iterm2, kitty, or sixel graphics protocol (kitty, iterm2, WezTerm, ghostty, foot). Anything else falls back to ascii blocks. Under tmux, enable `allow-passthrough`. Protocol detection is automatic; override with `--image-protocol` or `defaults.image_protocol`.
 
@@ -118,4 +118,4 @@ Set `speaker_notes.always_publish: true` in `config.yaml` to skip the publish fl
 <!-- include: foo.md -->
 ```
 
-Paths inside an included file resolve relative to that file — include `foo/bar.md` and its `tar.png` is looked up at `foo/tar.png`.
+Paths inside an included file resolve relative to that file. Include `foo/bar.md` and its `tar.png` is looked up at `foo/tar.png`.

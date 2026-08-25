@@ -1,11 +1,11 @@
 # Service Patterns
 
-> Effect v4. `Effect.Service` no longer exists — every service is a `Context.Service`.
+> Effect v4. `Effect.Service` no longer exists. Every service is a `Context.Service`.
 
 ## Context.Service Is the Only Service Constructor
 
 v3 had four ways to define a service (`Context.Tag`, `Context.GenericTag`, `Effect.Tag`,
-`Effect.Service`). v4 has one: **`Context.Service`**. Prefer the class syntax — the class
+`Effect.Service`). v4 has one: **`Context.Service`**. Prefer the class syntax, where the class
 value is the context key.
 
 ```typescript
@@ -51,8 +51,8 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 **Three things changed from v3:**
 
 1. `effect:` is now `make:`.
-2. There is **no auto-generated `Default` layer** — you write `static readonly layer` yourself.
-3. There is **no `accessors: true`** — accessors were removed entirely (see below).
+2. There is **no auto-generated `Default` layer**. You write `static readonly layer` yourself.
+3. There is **no `accessors: true`**. Accessors were removed entirely (see below).
 
 ### Layer Naming Convention
 
@@ -103,13 +103,13 @@ export class OrderService extends Context.Service<OrderService>()("OrderService"
 }
 ```
 
-`OrderService.layer` is now `Layer<OrderService, E, never>` — the dependencies are satisfied
+`OrderService.layer` is now `Layer<OrderService, E, never>`. The dependencies are satisfied
 inside it, so usage sites provide one layer, not four. This is the same guarantee v3's
 `dependencies` gave you, just written explicitly.
 
 ### Wrong: Leaving Dependencies Unsatisfied
 
-> See also: `anti-patterns.md` — [Prop-Drilling Dependencies Through Function Arguments]
+> See also: [Prop-Drilling Dependencies Through Function Arguments] in `anti-patterns.md`
 
 ```typescript
 // WRONG - layer doesn't provide what `make` requires
@@ -136,11 +136,11 @@ const program = Effect.gen(function* () {
 The leak is visible in the type: a third type parameter on `Layer` that isn't `never` means
 you forgot a `Layer.provide`.
 
-## Accessors Are Removed — Use `yield*`
+## Accessors Are Removed, Use `yield*`
 
 v3's `accessors: true` generated static proxy methods (`UserService.findById(id)`). v4 removed
 them. The proxy was built from mapped types over the service shape, which **erased generics and
-overloads** — a method `get<T>(key: string): Effect<T>` collapsed to `Effect<unknown>`.
+overloads**. A method `get<T>(key: string): Effect<T>` collapsed to `Effect<unknown>`.
 
 **Prefer `yield*`.** It makes the dependency visible at the call site:
 
@@ -152,7 +152,7 @@ const program = Effect.gen(function* () {
 })
 ```
 
-`use` and `useSync` exist as one-liner escapes, but reach for them sparingly — the service is
+`use` and `useSync` exist as one-liner escapes, but reach for them sparingly. The service is
 available inside the callback while the dependency stays invisible at the call site, which
 makes it easy to leak requirements into return values:
 
@@ -167,11 +167,11 @@ const port = AppConfig.useSync((c) => c.port)
 ```
 
 `use` takes `(service: Shape) => Effect<A, E, R>`; `useSync` takes a pure `(service: Shape) => A`.
-Both return Effects — `useSync` only means the callback itself is synchronous.
+Both return Effects. `useSync` only means the callback itself is synchronous.
 
 ## Effect.fn for Tracing
 
-`Effect.fn` is unchanged in v4. **Always wrap service methods with it** — it provides automatic
+`Effect.fn` is unchanged in v4. **Always wrap service methods with it.** It provides automatic
 tracing with meaningful span names.
 
 ### Naming Convention
@@ -219,7 +219,7 @@ yield* Effect.annotateCurrentSpan("step", "completing")
 ## Services Without `make` (Runtime-Injected Infrastructure)
 
 Omit `make` when the implementation is supplied by the runtime rather than constructed by your
-code. The class is then a bare key — the v4 replacement for v3's `Context.Tag`.
+code. The class is then a bare key, the v4 replacement for v3's `Context.Tag`.
 
 ### Cloudflare Worker Bindings
 
@@ -252,7 +252,7 @@ const handler = {
 ### Services With Default Values
 
 When a service has a sensible default and callers rarely override it, use `Context.Reference`
-instead — it never needs providing. This is also where v3's `FiberRef` went.
+instead, which never needs providing. This is also where v3's `FiberRef` went.
 
 ```typescript
 import { Context, Effect } from "effect"
@@ -261,7 +261,7 @@ const RequestTimeout = Context.Reference<number>("RequestTimeout", {
     defaultValue: () => 30_000,
 })
 
-// Read it like any service — no layer required
+// Read it like any service, no layer required
 const program = Effect.gen(function* () {
     const timeout = yield* RequestTimeout
 })
@@ -270,14 +270,14 @@ const program = Effect.gen(function* () {
 const withShortTimeout = Effect.provideService(program, RequestTimeout, 5_000)
 ```
 
-Note the v4 signature: `Context.Reference<Value>(id, options)` — a plain function call, not
+Note the v4 signature: `Context.Reference<Value>(id, options)` is a plain function call, not
 v3's `Context.Reference<Self>()(id, options)` curried class form.
 
 ### Database/Redis Clients (Infrastructure)
 
 ```typescript
 // Infrastructure provided at app root
-// Prefer @effect/sql or similar typed clients — their keys are already Context.Services
+// Prefer @effect/sql or similar typed clients, their keys are already Context.Services
 
 import { PgClient } from "@effect/sql-pg"
 
@@ -288,7 +288,7 @@ const DatabaseLive = PgClient.layer({
     database: "app",
 })
 
-// Config-driven — note this is layerConfig in v4, not layer
+// Config-driven, note this is layerConfig in v4, not layer
 const DatabaseLive = PgClient.layerConfig({
     host: Config.string("DB_HOST"),
     port: Config.int("DB_PORT"),
@@ -330,7 +330,7 @@ export class AppService extends Context.Service<AppService>()("AppService", {
 
 ### Return Types
 
-> See also: `anti-patterns.md` — [Using Impure Functions Directly in Business Logic] for why raw `fetch()`, `Math.random()`, etc. should be modeled as services
+> See also: [Using Impure Functions Directly in Business Logic] in `anti-patterns.md` for why raw `fetch()`, `Math.random()`, etc. should be modeled as services
 
 Services should return `Effect` types, never `Promise`:
 
@@ -383,8 +383,8 @@ export const UserServiceTest = Layer.succeed(
 )
 ```
 
-For a stateful mock, define a second layer on the real service class rather than a second class
-— the context key must be the same one production code yields:
+For a stateful mock, define a second layer on the real service class rather than a second class.
+The context key must be the same one production code yields:
 
 ```typescript
 export class UserService extends Context.Service<UserService>()("UserService", {

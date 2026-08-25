@@ -53,21 +53,21 @@ export const UserRpcs = RpcGroup.make(
 
 | Option | Purpose |
 | --- | --- |
-| `payload` | Request schema — a `Schema.Struct` or a bare fields object |
+| `payload` | Request schema, a `Schema.Struct` or a bare fields object |
 | `success` | Success schema (defaults to `Schema.Void`) |
 | `error` | Error schema (defaults to `Schema.Never`) |
 | `stream` | `true` for a streaming response |
-| `primaryKey` | Derives a request identity — needed for deduplication/persistence |
+| `primaryKey` | Derives a request identity, needed for deduplication/persistence |
 | `defect` | Schema for defects (defaults to `Schema.Defect()`) |
 
 v3's naming changed: `input` → `payload`, `output` → `success`. `success` and `error` are
-optional now — omit `error` rather than writing `Schema.Never`, and omit `success` for a
+optional now. Omit `error` rather than writing `Schema.Never`, and omit `success` for a
 void response.
 
 There is no `Rpc.query` / `Rpc.mutation` distinction in v4. Where the read/write difference
 matters operationally, express it with annotations (e.g. `Persisted`, `Uninterruptible`) rather
 than separate constructors. `Schema.TaggedRequest` classes are no longer auto-converted into
-RPCs — declare each contract explicitly with `Rpc.make`.
+RPCs. Declare each contract explicitly with `Rpc.make`.
 
 ## Error Unions in RPC
 
@@ -109,7 +109,7 @@ export class CurrentUser extends Context.Service<
     { id: UserId; role: UserRole; organizationId: OrganizationId }
 >()("CurrentUser") {}
 
-// Auth middleware — `failure` became `error`
+// Auth middleware, `failure` became `error`
 export class AuthMiddleware extends RpcMiddleware.Service<
     AuthMiddleware,
     { provides: CurrentUser }
@@ -150,12 +150,12 @@ export const ProtectedUserRpcs = UserRpcs.middleware(AuthMiddleware)
 ```
 
 Set `requiredForClient: true` in the options when the client must supply the middleware too.
-The middleware's `provides` metadata removes that service from each handler's requirements —
+The middleware's `provides` metadata removes that service from each handler's requirements, so
 handlers can yield `CurrentUser` without declaring it.
 
 ## Workflow Definition
 
-**Use `Workflow.make(tag, options)`** — the name moved from an option to the first argument:
+**Use `Workflow.make(tag, options)`.** The name moved from an option to the first argument:
 
 ```typescript
 import { Workflow } from "effect/unstable/workflow"
@@ -186,7 +186,7 @@ export const NotificationWorkflow = Workflow.make("NotificationWorkflow", {
 
 `idempotencyKey` is **required** in v4. Workflow definitions expose `_tag` and are
 class-compatible constructors, so a separate `id` field in the payload is no longer needed for
-identity — the idempotency key serves that role.
+identity, because the idempotency key serves that role.
 
 ### Workflow Implementation
 
@@ -255,7 +255,7 @@ export const OrderFulfillmentWorkflowLayer = OrderFulfillmentWorkflow.toLayer(
 ## Activity Patterns
 
 `Activity.make` keeps its v3 shape. **Always include `success` and `error` schemas** when the
-activity produces or fails with a value — they're what survives a workflow restart:
+activity produces or fails with a value. They're what survives a workflow restart:
 
 ```typescript
 // CORRECT - schemas specified
@@ -274,13 +274,13 @@ yield* Activity.make({
 yield* Activity.make({
     name: "SendEmail",
     execute: Effect.gen(function* () {
-        return { messageId: "msg-123" } // not serialized — lost on replay
+        return { messageId: "msg-123" } // not serialized, lost on replay
     }),
 })
 ```
 
 `success` defaults to `Schema.Void` and `error` to `Schema.Never`, so omitting them is correct
-for a genuinely void, infallible activity — but never when the activity returns data.
+for a genuinely void, infallible activity, but never when the activity returns data.
 
 `interruptRetryPolicy` is available for controlling retry-on-interrupt behavior per activity.
 
@@ -321,7 +321,7 @@ yield* Activity.make({
 
 ## ClusterCron for Scheduled Jobs
 
-`ClusterCron.make` returns a `Layer` directly and takes the work inline as `execute` — there is
+`ClusterCron.make` returns a `Layer` directly and takes the work inline as `execute`. There is
 no separate `.toLayer` step. The schedule is a parsed `Cron`, not a raw string:
 
 ```typescript
@@ -423,5 +423,5 @@ export class MessageService extends Context.Service<MessageService>()("MessageSe
 | `@effect/cluster` | `effect/unstable/cluster` (`Sharding`, `Entity`, `Singleton`, `ClusterCron`, `ClusterSchema`, `MessageStorage`, …) |
 | `@effect/workflow` | `effect/unstable/workflow` (`Workflow`, `Activity`) |
 
-All three are **unstable modules** — they may take breaking changes in minor releases. Pin your
+All three are **unstable modules**. They may take breaking changes in minor releases. Pin your
 Effect version if you depend on them heavily. See `v4-semantics.md`.

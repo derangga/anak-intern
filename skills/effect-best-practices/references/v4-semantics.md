@@ -1,12 +1,12 @@
 # v4 Semantics
 
-Behavior changes in Effect v4 that break v3 muscle memory. These aren't renames — the symbol
+Behavior changes in Effect v4 that break v3 muscle memory. These aren't renames. The symbol
 often stays the same while the meaning underneath it shifts, so a find-and-replace migration
 will miss every one of them.
 
 ## Yieldable: Ref, Deferred, and Fiber Are No Longer Effects
 
-In v3, many types were structural subtypes of `Effect` — they carried the Effect type ID at
+In v3, many types were structural subtypes of `Effect`. They carried the Effect type ID at
 runtime and could be used anywhere an `Effect` was expected: `Ref`, `Deferred`, `Fiber`,
 `FiberRef`, `Config`, `Option`, `Either`, `Context.Tag`.
 
@@ -28,7 +28,7 @@ interface Yieldable<Self, A, E = never, R = never> {
 `Effect`, `Option` (fails with `NoSuchElementError`), `Result` (fails with its error), `Config`
 (fails with `ConfigError`), `Context.Service` (yields the service).
 
-### No longer Effects — use the module function
+### No longer Effects, use the module function
 
 ```typescript
 // WRONG in v4 - these were valid v3
@@ -88,8 +88,8 @@ const obj = Equal.byReference({ a: 1 })
 Equal.equals(obj, { a: 1 }) // false
 ```
 
-- `byReference(obj)` — returns a `Proxy` using reference equality; the original is unchanged.
-- `byReferenceUnsafe(obj)` — marks the object itself; faster, but permanently changes how that
+- `byReference(obj)` returns a `Proxy` using reference equality; the original is unchanged.
+- `byReferenceUnsafe(obj)` marks the object itself; faster, but permanently changes how that
   object compares.
 
 Also renamed: `Equal.equivalence()` → `Equal.asEquivalence()`.
@@ -109,17 +109,17 @@ In v4 the runtime manages a reference-counted keep-alive timer itself, so this w
 ```typescript
 const program = Effect.gen(function* () {
     const deferred = yield* Deferred.make<string>()
-    yield* Deferred.await(deferred) // process stays alive — no runMain needed
+    yield* Deferred.await(deferred) // process stays alive, no runMain needed
 })
 
 Effect.runPromise(program)
 ```
 
-**`runMain` is still recommended** — just for different reasons than before:
+**`runMain` is still recommended**, just for different reasons than before:
 
-- **Signal handling** — `SIGINT` / `SIGTERM` gracefully interrupt the root fiber
-- **Exit codes** — calls `process.exit(code)` on failure or signal
-- **Error reporting** — reports unhandled errors
+- **Signal handling.** `SIGINT` / `SIGTERM` gracefully interrupt the root fiber
+- **Exit codes.** Calls `process.exit(code)` on failure or signal
+- **Error reporting.** Reports unhandled errors
 
 Use `runMain` for any real application entry point. The change means a script or test that
 forgot it no longer exits silently mid-flight.
@@ -133,13 +133,13 @@ Currently unstable: `ai`, `cli`, `cluster`, `devtools`, `eventlog`, `http`, `htt
 `jsonschema`, `observability`, `persistence`, `process`, `reactivity`, `rpc`, `schema`, `socket`,
 `sql`, `workflow`, `workers`.
 
-These are **correct** v4 import paths, not a code smell — much of what was `@effect/platform`,
+These are **correct** v4 import paths, not a code smell. Much of what was `@effect/platform`,
 `@effect/rpc`, and `@effect/cluster` in v3 lives here now. Modules graduate to the top-level
 `effect/*` namespace as they stabilize.
 
 Practical consequences:
 
-- Pin your Effect version if you depend heavily on `unstable/` modules — HTTP, RPC, cluster,
+- Pin your Effect version if you depend heavily on `unstable/` modules. HTTP, RPC, cluster,
   and atom code is the most exposed.
 - Expect import paths to change on graduation; a module moving from `effect/unstable/http` to
   `effect/http` is a rename, not a rewrite.

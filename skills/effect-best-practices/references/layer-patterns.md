@@ -1,6 +1,6 @@
 # Layer Patterns
 
-> Effect v4. There is no auto-generated `Default` layer — every service declares its own
+> Effect v4. There is no auto-generated `Default` layer. Every service declares its own
 > `static readonly layer`. See `service-patterns.md` for the service definition itself.
 
 ## Dependencies Belong in the Layer
@@ -31,7 +31,7 @@ export class OrderService extends Context.Service<OrderService>()("OrderService"
             PaymentService.layer,
         ]),
     )
-    //  ^? Layer<OrderService, E, never> — fully wired
+    //  ^? Layer<OrderService, E, never>, fully wired
 }
 
 // At app root - simple, flat composition
@@ -48,7 +48,7 @@ instead of chaining four separate `Layer.provide` calls.
 
 ### Wrong Pattern (Leaked Dependencies)
 
-> See also: `anti-patterns.md` — [Prop-Drilling Dependencies Through Function Arguments] for the broader anti-pattern
+> See also: [Prop-Drilling Dependencies Through Function Arguments] in `anti-patterns.md` for the broader anti-pattern
 
 ```typescript
 // WRONG - layer doesn't satisfy what make requires
@@ -71,7 +71,7 @@ const program = Effect.gen(function* () {
         OrderService.layer.pipe(
             Layer.provide(UserService.layer),
             Layer.provide(ProductService.layer),
-            // Easy to forget one — now a type error rather than a runtime surprise
+            // Easy to forget one, now a type error rather than a runtime surprise
         )
     ),
 )
@@ -115,7 +115,7 @@ export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
         return { findById }
     }),
 }) {
-    // Deliberately leaves PgClient in the requirements — provided at app root
+    // Deliberately leaves PgClient in the requirements, provided at app root
     static readonly layer = Layer.effect(this, this.make)
 }
 
@@ -197,7 +197,7 @@ together.
 
 ## Layer Memoization
 
-Layers memoize construction — the same service is instantiated only once regardless of how many
+Layers memoize construction. The same service is instantiated only once regardless of how many
 times it appears in the dependency graph.
 
 ```typescript
@@ -216,7 +216,7 @@ const AppLive = RepoLive.pipe(
 ### v4 change: memoization is shared across `Effect.provide` calls
 
 In v3, each `Effect.provide` call had its **own** memo map, so two provide calls with
-overlapping layers silently built those layers twice — a classic source of duplicate database
+overlapping layers silently built those layers twice, a classic source of duplicate database
 pools. In v4 the `MemoMap` is shared across provide calls on the same fiber, so this now builds
 one instance:
 
@@ -228,7 +228,7 @@ const program = myEffect.pipe(
 )
 ```
 
-**This is a safety net, not a license.** Compose layers before providing — it keeps the whole
+**This is a safety net, not a license.** Compose layers before providing. It keeps the whole
 dependency graph visible in one place:
 
 ```typescript
@@ -238,7 +238,7 @@ const program = myEffect.pipe(Effect.provide(AppLive))
 
 ### Opting out: fresh instances on purpose
 
-Sometimes you *want* a separate instance — test isolation, independent connection pools:
+Sometimes you *want* a separate instance, for test isolation or independent connection pools:
 
 ```typescript
 // Layer.fresh - this layer bypasses the shared memo map
@@ -368,7 +368,7 @@ rather than v3's `Live` / `Default` convention:
 | `Service.layerTest` | test / mock implementation |
 
 Standalone infrastructure layers that aren't attached to a service class may still use a
-`Live` suffix (`DatabaseLive`, `RedisLive`) — there is no class to hang a static on.
+`Live` suffix (`DatabaseLive`, `RedisLive`), since there is no class to hang a static on.
 
 ```typescript
 // Test with a static double
@@ -380,7 +380,7 @@ export const UserServiceTest = Layer.succeed(
     })
 )
 
-// Test with in-memory state — a second layer on the SAME class,
+// Test with in-memory state, a second layer on the SAME class,
 // so production code yielding UserService gets the mock
 export class UserService extends Context.Service<UserService>()("UserService", {
     make: Effect.gen(function* () { /* real implementation */ }),
@@ -409,7 +409,7 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 }
 ```
 
-A *separate* mock class also works — context lookup is by the identifier **string**, so
+A *separate* mock class also works, because context lookup is by the identifier **string**, so
 `class UserServiceInMemory extends Context.Service<UserService>()("UserService", ...)` occupies
 the same slot. But that match is an unchecked convention: a typo in the string silently yields a
 different service and the failure shows up as a missing-requirement error somewhere else.
@@ -458,17 +458,17 @@ const ValidatedConfigLive = Layer.unwrap(
 ```
 
 For validation attached to the config itself rather than a wrapper layer, prefer
-`Config.schema(schema.check(...), path)` — v4 moved `Config.validate` into Schema checks.
+`Config.schema(schema.check(...), path)`. v4 moved `Config.validate` into Schema checks.
 
 ## Scoped Layers
 
-`Layer.scoped` is gone in v4 — scoped acquisition merged into `Layer.effect`, which supplies
+`Layer.scoped` is gone in v4. Scoped acquisition merged into `Layer.effect`, which supplies
 the layer's `Scope` and excludes it from the requirements:
 
 ```typescript
 import { Context, Effect, Layer } from "effect"
 
-// Resource that needs cleanup — Layer.effect handles the Scope
+// Resource that needs cleanup, Layer.effect handles the Scope
 const DatabaseConnectionLive = Layer.effect(
     DatabaseConnection,
     Effect.acquireRelease(

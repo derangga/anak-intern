@@ -4,7 +4,7 @@ Attributes go after the language on the opening fence: ```` ```rust +exec +line_
 
 ## Highlighting
 
-`+line_numbers` shows line numbers. `+no_background` drops the code background — useful with `+exec_replace`.
+`+line_numbers` shows line numbers. `+no_background` drops the code background, useful with `+exec_replace`.
 
 Selective highlighting takes lines and ranges in braces; everything else renders dimmed:
 
@@ -24,7 +24,7 @@ Dynamic highlighting splits those groups with `|`, advancing one group per keypr
 ```
 ~~~
 
-Include an external file with the `file` snippet type — `path` and `language` are required, `start_line`/`end_line` optional:
+Include an external file with the `file` snippet type. `path` and `language` are required, `start_line`/`end_line` optional:
 
 ~~~markdown
 ```file +exec +line_numbers
@@ -63,7 +63,7 @@ echo hello world
 | `+auto_exec` | run without pressing anything |
 | `+exec_replace` | run automatically and replace the snippet with its output (needs `-X`) |
 | `+image` | like `+exec_replace`, but the output must be *only* a jpg/png (needs `-X`) |
-| `+exec:<executor>` | alternative executor — `rust-script` for rust, `pytest` / `uv` for python |
+| `+exec:<executor>` | alternative executor, `rust-script` for rust, `pytest` / `uv` for python |
 | `+validate` | not executable, but checked by `--validate-snippets` |
 | `+expect:failure` | assert a non-zero exit; error if it succeeds |
 | `+id:<name>` | name the snippet so its output can be placed elsewhere |
@@ -88,7 +88,7 @@ Run presenterm with `--validate-snippets` while writing to execute every `+exec`
 
 Escape codes in output are honoured, so force color on tools that auto-disable it (`ls --color=always`).
 
-Hide setup lines from the audience while still executing them, using a per-language prefix — `# ` for rust, `/// ` for python, bash, fish, shell, zsh, kotlin, java, javascript, typescript, c, c++, go:
+Hide setup lines from the audience while still executing them, using a per-language prefix: `# ` for rust, `/// ` for python, bash, fish, shell, zsh, kotlin, java, javascript, typescript, c, c++, go:
 
 ~~~markdown
 ```rust +exec
@@ -102,7 +102,7 @@ println!("Hello world!");
 
 ## Mermaid
 
-Needs [mermaid-cli](https://github.com/mermaid-js/mermaid-cli), which spins up a browser — roughly 2s per diagram, rendered on `snippet.render.threads` threads (default 2).
+Needs [mermaid-cli](https://github.com/mermaid-js/mermaid-cli), which spins up a browser. Expect roughly 2s per diagram, rendered on `snippet.render.threads` threads (default 2).
 
 ~~~markdown
 ```mermaid +render +width:50%
@@ -111,7 +111,7 @@ sequenceDiagram
 ```
 ~~~
 
-Size via `mermaid.scale` in `config.yaml` first, then `+width` per diagram — a small scale scaled up with `+width` goes blurry. Colors via the theme's `mermaid.background` and `mermaid.theme`. Drop the `+render` requirement per-language with `options.auto_render_languages`.
+Size via `mermaid.scale` in `config.yaml` first, then `+width` per diagram. A small scale scaled up with `+width` goes blurry. Colors via the theme's `mermaid.background` and `mermaid.theme`. Drop the `+render` requirement per-language with `options.auto_render_languages`.
 
 ## LaTeX and typst
 
@@ -141,7 +141,7 @@ typst:
   vertical_margin: 2
 ```
 
-Images inside a typst snippet must use absolute paths (`#image("/image1.png")`), resolved relative to the presentation's directory — so the image must sit in that directory or below it.
+Images inside a typst snippet must use absolute paths (`#image("/image1.png")`), resolved relative to the presentation's directory, so the image must sit in that directory or below it.
 
 ## D2
 

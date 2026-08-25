@@ -22,7 +22,7 @@ const MyApi = HttpApi.make('MyApi')
   .annotate(OpenApi.Description, 'A sample Effect API')
 ```
 
-`HttpApi.make(name)` no longer takes API-wide error or service generics — declare errors on
+`HttpApi.make(name)` no longer takes API-wide error or service generics. Declare errors on
 each endpoint instead.
 
 ### HttpApiGroup
@@ -44,7 +44,7 @@ const AdminApi = HttpApiGroup.make('admin').prefix('/admin').add(deleteUser)
 import { HttpApiEndpoint, HttpApiSchema } from 'effect/unstable/httpapi'
 import { Schema } from 'effect'
 
-// GET with path parameters — note the key is `params`, not `path`
+// GET with path parameters. Note the key is `params`, not `path`
 const getUser = HttpApiEndpoint.get('getUser', '/users/:id', {
   params: { id: UserId },
   success: User,
@@ -58,14 +58,14 @@ const createUser = HttpApiEndpoint.post('createUser', '/users', {
   error: UserCreateError,
 })
 
-// DELETE — the constructor is `delete`, not v3's `del`
+// DELETE: the constructor is `delete`, not v3's `del`
 const deleteUser = HttpApiEndpoint.delete('deleteUser', '/users/:id', {
   params: { id: UserId },
   error: UserNotFoundError,
 })
 ```
 
-`params`, `query`, and `headers` accept either a `Schema.Struct` or a bare fields object —
+`params`, `query`, and `headers` accept either a `Schema.Struct` or a bare fields object.
 `{ id: UserId }` is shorthand for `Schema.Struct({ id: UserId })`.
 
 ### Available HTTP Methods
@@ -89,7 +89,7 @@ const deleteUser = HttpApiEndpoint.delete('deleteUser', '/users/:id', {
 | `headers` | `setHeaders(schema)` | Required headers |
 | `payload` | `setPayload(schema)` | Request body |
 | `success` | `setSuccess(schema)` | Success response schema |
-| `error` | `addError(schema)` | Error response — one schema or an array |
+| `error` | `addError(schema)` | Error response, one schema or an array |
 
 ```typescript
 HttpApiEndpoint.post('createUser', '/users', {
@@ -117,7 +117,7 @@ export class UserCreateError extends Schema.TaggedError<UserCreateError>()('User
   message: Schema.String,
 }).pipe(HttpApiSchema.status(400)) {}
 
-// Reference it on the endpoint — status mapping is automatic
+// Reference it on the endpoint. Status mapping is automatic
 const getUser = HttpApiEndpoint.get('getUser', '/users/:id', {
   success: User,
   error: UserNotFoundError, // Automatically 404
@@ -127,21 +127,21 @@ const getUser = HttpApiEndpoint.get('getUser', '/users/:id', {
 v3's `HttpApiSchema.annotations({ status: 404 })` third argument is gone. Two v4 forms work:
 
 ```typescript
-// Preferred — pipe the status onto the schema
+// Preferred: pipe the status onto the schema
 Schema.TaggedError<E>()('E', { ... }).pipe(HttpApiSchema.status(404))
 
-// Also valid — the annotation directly
+// Also valid: the annotation directly
 Schema.TaggedError<E>()('E', { ... }, { httpApiStatus: 404 })
 ```
 
-> See also: `anti-patterns.md` — [Duplicating Error Handling in Every Route Handler]
-> See also: `error-patterns.md` — [HTTP Status Codes (Without Generic Errors)]
+> See also: [Duplicating Error Handling in Every Route Handler] in `anti-patterns.md`
+> See also: [HTTP Status Codes (Without Generic Errors)] in `error-patterns.md`
 
 ## HttpApiBuilder Handlers
 
 ### Implementing Handlers
 
-`handlers.handle(...)` is a method now — no `.pipe(HttpApiBuilder.handle(...))` chain:
+`handlers.handle(...)` is a method now, with no `.pipe(HttpApiBuilder.handle(...))` chain:
 
 ```typescript
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
@@ -183,7 +183,7 @@ The handler function receives a destructurable object whose keys match the endpo
 | `payload` | Request body    | `payload` option  |
 | `headers` | HTTP headers    | `headers` option  |
 
-Note `params` and `query` — v3 called these `path` and `urlParams`.
+Note `params` and `query`. v3 called these `path` and `urlParams`.
 
 ### Providing Dependencies
 
@@ -201,7 +201,7 @@ with `HttpRouter`.
 
 ## Deriving an HTTP Client
 
-The same `HttpApi` definition that drives the server also derives a fully-typed client. Endpoint names, params/payload/query/headers shapes, success types, and the error union all come from the contract — there are no hand-written URLs, JSON wrappers, or status-code branches.
+The same `HttpApi` definition that drives the server also derives a fully-typed client. Endpoint names, params/payload/query/headers shapes, success types, and the error union all come from the contract. There are no hand-written URLs, JSON wrappers, or status-code branches.
 
 ### Basic Derivation
 
@@ -248,7 +248,7 @@ const client =
 
 Wrapping the underlying `HttpClient` once means every derived endpoint call goes through it. Use it for auth, logging, retries, or telemetry instead of repeating logic at call sites.
 
-Worked example — silent token refresh on 401, with a semaphore so concurrent 401s don't stampede `/auth/refresh`:
+Worked example, silent token refresh on 401, with a semaphore so concurrent 401s don't stampede `/auth/refresh`:
 
 ```typescript
 import { Effect, Semaphore } from 'effect'
@@ -262,7 +262,7 @@ const refreshTokens = semaphore
   )
   .pipe(Effect.ignore)
 
-// HttpClient never *fails* on non-2xx — the 401 arrives as a successful Response value.
+// HttpClient never *fails* on non-2xx. The 401 arrives as a successful Response value.
 // On a 401: refresh once, then re-issue the original request exactly once.
 const authClient = baseHttpClient.pipe(
   HttpClient.transformResponse((effect) =>
@@ -281,7 +281,7 @@ const client =
 
 v4 renames in that example: `Effect.makeSemaphore` → `Semaphore.make` (module `effect/Semaphore`), `HttpBody.unsafeJson` → `HttpBody.jsonUnsafe`, `Effect.zipRight` → `Effect.andThen`.
 
-A retried response that is still 401 flows back through `HttpApiClient`, which maps it to the contract's typed `Unauthorized` error — callers see a tagged error, not a raw status code.
+A retried response that is still 401 flows back through `HttpApiClient`, which maps it to the contract's typed `Unauthorized` error. Callers see a tagged error, not a raw status code.
 
 ### Extracting the Typed Error Union
 
@@ -325,13 +325,13 @@ const user = await runClient((client) => client.auth.login({ payload: input }))
 ### Client Anti-Patterns
 
 ```typescript
-// FORBIDDEN — hand-rolled fetch against a typed contract
+// FORBIDDEN: hand-rolled fetch against a typed contract
 await fetch("/api/users/" + id).then((r) => r.json()) // Use client.users.getUser
 
-// FORBIDDEN — per-call-site refresh/retry logic
+// FORBIDDEN: per-call-site refresh/retry logic
 const res = await callApi(); if (res.status === 401) { await refresh(); ... } // Use an interceptor
 
-// FORBIDDEN — losing the typed error union by `Effect.catch` (v3's catchAll)
+// FORBIDDEN: losing the typed error union by `Effect.catch` (v3's catchAll)
 client.users.getUser({ params }).pipe(Effect.catch(() => Effect.fail("oops")))
 // Use catchTag("UserNotFoundError", ...) to preserve exhaustiveness
 ```
@@ -361,7 +361,7 @@ const withLogging = HttpMiddleware.make((handler) =>
 )
 ```
 
-Use `Clock.currentTimeMillis` rather than `Date.now()` — it stays testable under `TestClock`.
+Use `Clock.currentTimeMillis` rather than `Date.now()`. It stays testable under `TestClock`.
 
 ### Request ID Middleware
 
@@ -400,7 +400,7 @@ v4 renames: `Duration.DurationInput` → `Duration.Input`, and `TimeoutException
 
 ### Middleware Composition Order
 
-Middleware composes inside-out — the last applied middleware runs first:
+Middleware composes inside-out, so the last applied middleware runs first:
 
 ```typescript
 const ServerLive = HttpRouter.serve(MyApiLive).pipe(
@@ -409,7 +409,7 @@ const ServerLive = HttpRouter.serve(MyApiLive).pipe(
 )
 ```
 
-`HttpApiBuilder.serve()` and `HttpApiBuilder.middlewareCors(...)` are gone — serving and CORS
+`HttpApiBuilder.serve()` and `HttpApiBuilder.middlewareCors(...)` are gone. Serving and CORS
 both moved to `HttpRouter` (`HttpRouter.serve`, `HttpRouter.cors`).
 
 ## Authentication
@@ -533,7 +533,7 @@ const ServerLive = HttpRouter.serve(MyApiLive).pipe(
 
 ```typescript
 HttpRouter.cors({
-  // Allowed origins — use specific domains in production
+  // Allowed origins, use specific domains in production
   allowedOrigins: ['https://app.example.com', 'https://admin.example.com'],
 
   // Allowed HTTP methods
@@ -558,8 +558,8 @@ For route-scoped CORS rather than global, pass `HttpMiddleware.cors(options)` th
 
 ### CORS Security Rules
 
-1. **Never use `"*"` with `credentials: true`** — browsers reject this combination
-2. **List specific origins** in production — not wildcard
+1. **Never use `"*"` with `credentials: true`.** Browsers reject this combination
+2. **List specific origins** in production, never a wildcard
 3. **Limit `allowedMethods`** to only what your API uses
 4. **Set `maxAge`** to reduce preflight requests
 
@@ -636,7 +636,7 @@ const withRateLimit = HttpMiddleware.make((handler) =>
 )
 ```
 
-> See also: `concurrency-patterns.md` — [Semaphore] for limiting concurrent access to resources
+> See also: [Semaphore] in `concurrency-patterns.md` for limiting concurrent access to resources
 
 ### Rate Limit Error
 
@@ -676,7 +676,7 @@ rather than `.pipe(...)`. See `schema-patterns.md`.
 
 ```typescript
 const getUser = HttpApiEndpoint.get('getUser', '/users/:id', {
-  params: { id: UserId }, // Branded UUID — validated automatically
+  params: { id: UserId }, // Branded UUID, validated automatically
   success: User,
 })
 // Invalid UUID in path → automatic 400
@@ -695,7 +695,7 @@ const listUsers = HttpApiEndpoint.get('listUsers', '/users', {
 })
 ```
 
-`Schema.Literal('asc', 'desc')` became `Schema.Literals(['asc', 'desc'])` — one array argument.
+`Schema.Literal('asc', 'desc')` became `Schema.Literals(['asc', 'desc'])`, taking one array argument.
 
 ## OpenAPI / Swagger
 
@@ -754,12 +754,12 @@ const ServerLive = HttpRouter.serve(MyApiLive).pipe(
 NodeRuntime.runMain(Layer.launch(ServerLive))
 ```
 
-`runMain` is still the recommended entry point in v4 — for signal handling, exit codes, and
+`runMain` is still the recommended entry point in v4 for signal handling, exit codes, and
 error reporting. Process keep-alive is now built into the core runtime. See `v4-semantics.md`.
 
 ## Testing HTTP APIs
 
-`HttpApiTest.groups` builds an in-process client against the real handlers — no server, no port:
+`HttpApiTest.groups` builds an in-process client against the real handlers, no server and no port:
 
 ```typescript
 import { assert, it } from '@effect/vitest'
@@ -780,15 +780,15 @@ it.effect('returns the user', () =>
 | API                                        | Import                        | Purpose                                        |
 | ------------------------------------------ | ----------------------------- | ---------------------------------------------- |
 | `HttpApi.make(name)`                       | `effect/unstable/httpapi`     | Create API definition                          |
-| `api.add(group)`                           | —                             | Add endpoint group (method, not `addGroup`)    |
+| `api.add(group)`                           | n/a                           | Add endpoint group (method, not `addGroup`)    |
 | `HttpApiGroup.make(name)`                  | `effect/unstable/httpapi`     | Group related endpoints                        |
-| `group.add(...endpoints)`                  | —                             | Add endpoints (variadic method)                |
-| `group.prefix(path)`                       | —                             | Shared path prefix                             |
-| `group.middleware(M)`                      | —                             | Attach middleware to a group                   |
+| `group.add(...endpoints)`                  | n/a                           | Add endpoints (variadic method)                |
+| `group.prefix(path)`                       | n/a                           | Shared path prefix                             |
+| `group.middleware(M)`                      | n/a                           | Attach middleware to a group                   |
 | `HttpApiEndpoint.get(id, path, options)`   | `effect/unstable/httpapi`     | Define GET endpoint                            |
 | `HttpApiEndpoint.delete(id, path, opts)`   | `effect/unstable/httpapi`     | Define DELETE endpoint (v3: `del`)             |
 | `HttpApiBuilder.group(api, name, fn)`      | `effect/unstable/httpapi`     | Implement group handlers                       |
-| `handlers.handle(name, fn)`                | —                             | Implement endpoint handler (method)            |
+| `handlers.handle(name, fn)`                | n/a                           | Implement endpoint handler (method)            |
 | `HttpApiBuilder.endpoint(...)`             | `effect/unstable/httpapi`     | Standalone endpoint impl (v3: `handler`)       |
 | `HttpApiBuilder.layer(api)`                | `effect/unstable/httpapi`     | Register API with the router (v3: `api`)       |
 | `HttpRouter.serve(appLayer)`               | `effect/unstable/http`        | Serve (v3: `HttpApiBuilder.serve()`)           |
