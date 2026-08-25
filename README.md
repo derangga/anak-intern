@@ -9,7 +9,7 @@ injected on every session so the output stays readable.
 
 ```sh
 claude plugin marketplace add derangga/anak-intern
-claude plugin install skills@anak-intern
+claude plugin install anak-intern@anak-intern
 ```
 
 Start a new session afterwards. The hook fires at session start, so an
@@ -23,7 +23,8 @@ To turn it off, run `/plugin` and disable it.
   `SessionStart` hook, not on demand. Also invokable as a skill to clean up a
   specific piece of text.
 - **bro** Restate the last message in plain human language, no jargon.
-- **design-thinking** Design thinking workflow and reference graph.
+- **design-thinking** The design pass before writing Effect code. Draw the call
+  graph, annotate A/E/R, then emit it.
 - **presenterm** Writing presentations for
   [presenterm](https://github.com/mfontanini/presenterm) and configuring it.
 - **effect-best-practices** Best practices, patterns, and anti-patterns for the
@@ -31,7 +32,6 @@ To turn it off, run `/plugin` and disable it.
 - **teach** Explain a body of work plainly, at the reader's pace.
 - **technical-writing** Diataxis structure, Google developer style, Simplified
   Technical English instruction rules. For docs, RFCs, readmes, PR descriptions.
-- **writing-plans** Turn a spec into a task-by-task implementation plan.
 
 ## How unslop is always on
 
@@ -71,7 +71,6 @@ git clone https://github.com/Effect-TS/effect .repos/effect
 - `unslop`, `teach`, and `technical-writing` are from
   [pstack](https://github.com/cursor/plugins/tree/main/pstack) by the Cursor
   team, MIT. unslop's scope and persistence sections are mine.
-- `writing-plans` is from [superpowers](https://github.com/obra/superpowers).
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).

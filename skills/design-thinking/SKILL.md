@@ -1,6 +1,6 @@
 ---
 name: design-thinking
-description: The design pass that runs before code — name the shapes, draw the call graph, annotate A/E/R, then emit it. Use before any change that adds or changes behaviour; for interface work reach references/design-graph.md.
+description: The design pass that runs before Effect code. Name the shapes, draw the call graph, annotate A/E/R, then emit it. Use when designing an Effect<A, E, R> workflow, deciding retry/escape/die on the error channel, choosing Effect vs Stream, placing Schema at a boundary, or tying acquire/release to a scope; for interface work reach references/design-graph.md.
 ---
 
 # Design Thinking

@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "skills",
+      "name": "anak-intern",
       "description": "Skills for Effect, presenterm, design thinking, and plain-language explanations. Ships unslop as an always-on writing filter.",
       "source": "./",
       "category": "productivity"

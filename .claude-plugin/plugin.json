@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "skills",
+  "name": "anak-intern",
   "version": "0.1.0",
   "description": "Personal skills collection. Includes unslop, injected on every session to cut AI tells from written output.",
   "author": {
