@@ -6,6 +6,5 @@
   "author": {
     "name": "derangga",
     "url": "https://github.com/derangga"
-  },
-  "hooks": "./hooks/hooks.json"
+  }
 }

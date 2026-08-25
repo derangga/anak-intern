@@ -35,7 +35,8 @@ To turn it off, run `/plugin` and disable it.
 
 ## How unslop is always on
 
-`hooks/hooks.json` registers two hooks, `SessionStart` and `SubagentStart`, and
+`hooks/hooks.json` is loaded automatically by Claude Code, no manifest entry
+needed. It registers two hooks, `SessionStart` and `SubagentStart`, and
 both run `cat skills/unslop/SKILL.md`. Claude Code takes the stdout and prepends
 it as context. That is the whole implementation, there is no code.
 
