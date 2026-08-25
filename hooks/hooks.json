@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/skills/unslop/SKILL.md\"",
+            "timeout": 5,
+            "statusMessage": "Loading unslop..."
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/skills/unslop/SKILL.md\"",
+            "timeout": 5,
+            "statusMessage": "Loading unslop..."
+          }
+        ]
+      }
+    ]
+  }
+}

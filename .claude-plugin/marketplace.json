@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "anak-intern",
+  "description": "Personal Claude Code skills, plus always-on unslop.",
+  "owner": {
+    "name": "derangga",
+    "url": "https://github.com/derangga"
+  },
+  "plugins": [
+    {
+      "name": "skills",
+      "description": "Skills for Effect, presenterm, design thinking, and plain-language explanations. Ships unslop as an always-on writing filter.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

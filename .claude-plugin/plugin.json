@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "skills",
+  "version": "0.1.0",
+  "description": "Personal skills collection. Includes unslop, injected on every session to cut AI tells from written output.",
+  "author": {
+    "name": "derangga",
+    "url": "https://github.com/derangga"
+  },
+  "hooks": "./hooks/hooks.json"
+}

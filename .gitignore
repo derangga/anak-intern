@@ -1,0 +1,6 @@
+# Local reference clones, see README
+.repos/
+ponytail/
+
+node_modules/
+dist/
