@@ -58,15 +58,6 @@ ln -s "$PWD/.opencode/plugins/unslop.mjs" ~/.config/opencode/plugins/unslop.mjs
 
 Restart OpenCode afterwards.
 
-## Local reference clones
-
-Not tracked. Restore on a new machine with:
-
-```sh
-git clone https://github.com/DietrichGebert/ponytail ponytail
-git clone https://github.com/Effect-TS/effect .repos/effect
-```
-
 ## Credits
 
 - `unslop`, `teach`, and `technical-writing` are from
