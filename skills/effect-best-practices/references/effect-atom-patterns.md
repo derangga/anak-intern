@@ -1,31 +1,28 @@
 # Effect Atom Patterns
 
-Effect Atom is a reactive state management library that integrates with Effect-TS. It provides atoms (reactive containers), automatic dependency tracking, and seamless React integration.
+Effect Atom is a reactive state management library that integrates with Effect. It provides atoms (reactive containers), automatic dependency tracking, and seamless React integration.
 
-> **Effect v4 changes.** The React package is **`@effect/atom-react`** (v3: `@effect-atom/atom-react`),
-> and it no longer re-exports the core modules. `Atom` and `AsyncResult` are imported from
-> **`effect/unstable/reactivity`**. v3's `Result` is now `AsyncResult`, and the chainable
-> `Result.builder` has been **removed**.
+> **Effect v4.** The React package is **`@effect/atom-react`**. `Atom` and `AsyncResult`
+> are imported from **`effect/unstable/reactivity`**.
 
 ## Core Concepts
 
 - **Atoms**: Reactive state containers with automatic dependency tracking
-- **AsyncResult**: Handles async/effectful computations with initial, success, and failure states
-- **Finalizers**: Built-in cleanup for resources and event listeners
-- **Families**: Dynamic atom creation for per-entity state
+- **AsyncResult**: Handles async and effectful computations with initial, success, and failure states
+- **Finalizers**: Built in cleanup for resources and event listeners
+- **Families**: Dynamic atom creation for per entity state
 
 ## Imports at a Glance
 
 ```typescript
-// Core atom + result modules, from effect
+// Core atom and result modules, from effect
 import { Atom, AsyncResult } from "effect/unstable/reactivity"
 
 // React bindings, from the framework package
 import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
 ```
 
-Sibling packages `@effect/atom-solid` and `@effect/atom-vue` follow the same split. All of them
-share one version number with `effect` itself.
+Sibling packages `@effect/atom-solid` and `@effect/atom-vue` follow the same split.
 
 ## Creating Atoms
 
@@ -37,11 +34,12 @@ import { Atom } from "effect/unstable/reactivity"
 // Simple value atom
 const countAtom = Atom.make(0)
 
-// With keepAlive - persists when no components subscribe
+// With keepAlive, persists when no components subscribe
 const persistentCountAtom = Atom.make(0).pipe(Atom.keepAlive)
 ```
 
 **Rule:** Use `Atom.keepAlive` for global state that should persist across component unmounts.
+Define atoms outside components.
 
 ### Derived Atoms
 
@@ -70,7 +68,7 @@ const scrollYAtom = Atom.make((get) => {
 ```
 
 **Critical:**
-- Use `get.setSelf` to update the atom's own value
+- Use `get.setSelf` to update the atom own value
 - Always add finalizers with `get.addFinalizer()` to clean up side effects
 - Finalizers run when the atom is rebuilt or disposed
 
@@ -94,12 +92,12 @@ const resolvedThemeAtom = Atom.transform(themeAtom, (get) => {
 
 ## Atom Families
 
-Use `Atom.family` for per-entity state:
+Use `Atom.family` for per entity state:
 
 ```typescript
 import { Atom } from "effect/unstable/reactivity"
 
-// Create a family of atoms - one per channelId
+// Create a family of atoms, one per channelId
 const replyToMessageAtomFamily = Atom.family((channelId: string) =>
     Atom.make<string | null>(null).pipe(Atom.keepAlive)
 )
@@ -123,7 +121,7 @@ const modalAtomFamily = Atom.family((type: ModalType) =>
 ```
 
 **Use families for:**
-- Per-resource state (users, channels, documents)
+- Per resource state (users, channels, documents)
 - Modal instances
 - Form state per entity
 - Any parameterized state
@@ -206,7 +204,7 @@ const handleSubmit = async () => {
     } catch (err) {
         showError(err)
     }
-    // No finally - result.waiting updates automatically
+    // No finally block, result.waiting updates automatically
 }
 
 <Button disabled={isLoading}>{isLoading ? "Loading..." : "Submit"}</Button>
@@ -214,7 +212,7 @@ const handleSubmit = async () => {
 
 **Why this is preferred:**
 - Single source of truth, loading state lives on the AsyncResult
-- No `finally` blocks or manual state resets
+- No manual state resets
 - Automatically synchronized with the mutation lifecycle
 
 ### Dialog Components Own Their Mutations
@@ -225,7 +223,7 @@ Move mutation logic INTO dialog components rather than keeping it in page compon
 **Parent provides:** data props, `onSuccess` callback
 
 ```typescript
-// CORRECT - dialog owns its mutation
+// CORRECT, dialog owns its mutation
 function ArchivePaywallDialog({
     paywall,
     onSuccess,
@@ -280,7 +278,7 @@ const archivePaywallMutation = Atom.make(
     { reactivityKeys: ["paywalls"] }
 )
 
-// Query atom with matching reactivityKeys, auto-invalidated after mutation
+// Query atom with matching reactivityKeys, auto invalidated after mutation
 const paywallsAtom = Atom.make(
     Effect.fn(function* () {
         return yield* paywallService.list()
@@ -291,8 +289,8 @@ const paywallsAtom = Atom.make(
 
 **Rules:**
 - Both the mutation and query must share at least one matching key
-- After the mutation succeeds, all atoms with matching keys re-execute
-- Replaces manual patterns like calling `refreshPaywalls()` after mutations
+- After the mutation succeeds, all atoms with matching keys re execute
+- This pattern takes the place of manual calls such as `refreshPaywalls()` after mutations
 
 ## Working with Effects and AsyncResult
 
@@ -311,11 +309,11 @@ const userAtom = Atom.make(
 ```
 
 `AsyncResult` has three states, `Initial`, `Success`, and `Failure`, plus a `waiting` flag that is
-orthogonal to all three (a `Success` can be `waiting: true` while it refreshes).
+orthogonal to all three. A `Success` can have `waiting: true` while it refreshes.
 
 ### Rendering with AsyncResult.match
 
-`Result.builder` is gone in v4. Use `AsyncResult.match` for the three states:
+Use `AsyncResult.match` for the three states:
 
 ```typescript
 import { AsyncResult } from "effect/unstable/reactivity"
@@ -336,8 +334,8 @@ Each handler receives the **variant**, not the bare value, so success is `succes
 
 ### Typed Errors with AsyncResult.matchWithError
 
-`matchWithError` splits a failure into a typed error and a defect, which is what the old
-`onErrorTag` chain was for. Branch on `_tag` inside `onError`:
+`matchWithError` splits a failure into a typed error and a defect. Branch on `_tag` inside
+`onError`:
 
 ```typescript
 function ResourceEmbed({ url }: { url: string }) {
@@ -363,15 +361,25 @@ function ResourceEmbed({ url }: { url: string }) {
 }
 ```
 
-A `switch` on `_tag` narrows each branch exactly as `onErrorTag` did, and the `default` case is
-the old `.onError` fallback. Unlike the builder, an unhandled state is a **compile error** rather
-than a silent `null` from `render()`.
+A `switch` on `_tag` narrows each branch. The `default` case handles remaining errors. An
+unhandled state is a **compile error**.
+
+Explicit `_tag` checks also work outside match helpers:
+
+```typescript
+function StatusBadge() {
+    const result = useAtomValue(resourceAtom)
+    if (result._tag === "Initial") return <Skeleton />
+    if (result._tag === "Failure") return <ErrorCard message={String(result.cause)} />
+    return <span>{result.value.name}</span>
+}
+```
 
 ### AsyncResult API
 
 | API | Purpose |
 |--------|---------|
-| `AsyncResult.match(r, {...})` | Exhaustive 3-case match: `onInitial` / `onFailure` / `onSuccess` |
+| `AsyncResult.match(r, {...})` | Exhaustive 3 case match: `onInitial` / `onFailure` / `onSuccess` |
 | `AsyncResult.matchWithError(r, {...})` | Splits failure into `onError` (typed) and `onDefect` |
 | `AsyncResult.getOrElse(r, fn)` | Extract the value, or a fallback |
 | `AsyncResult.value(r)` | `Option<A>` of the current value |
@@ -383,7 +391,7 @@ than a silent `null` from `render()`.
 
 ### Extracting Values with getOrElse
 
-For non-rendering use cases:
+For non rendering use cases:
 
 ```typescript
 function useRepositories() {
@@ -411,7 +419,7 @@ function UserName() {
 
 | Pattern | Use Case |
 |---------|----------|
-| `AsyncResult.match` | UI rendering, all three states, no typed-error branching |
+| `AsyncResult.match` | UI rendering, all three states, no typed error branching |
 | `AsyncResult.matchWithError` | APIs with tagged errors (HttpApi, RPC) |
 | `AsyncResult.getOrElse` | Extracting values with a fallback |
 | `AsyncResult.isSuccess` guard | Early return when only success matters |
@@ -429,7 +437,7 @@ const userProfileAtom = Atom.make(
 )
 ```
 
-The context type is `Atom.AtomContext` in v4 (v3: `Atom.Context`).
+The context type is `Atom.AtomContext`.
 
 ## Batching Updates
 
@@ -466,22 +474,21 @@ const themeAtom = Atom.kvs({
 })
 ```
 
-Note `Schema.Literals([...])` with an array. v4 made the multi-literal constructor take one
-array argument, and `Schema.Literal` now takes exactly one value.
+`Schema.Literals` takes one array argument. `Schema.Literal` takes exactly one value.
 
 ## Anti-Patterns
 
 ### FORBIDDEN: Creating Atoms Inside Components
 
 ```typescript
-// WRONG - creates new atom on every render
+// WRONG, creates new atom on every render
 function Counter() {
     const countAtom = Atom.make(0) // New atom each render!
     const count = useAtomValue(countAtom)
     return <div>{count}</div>
 }
 
-// CORRECT - define atoms outside components
+// CORRECT, define atoms outside components
 const countAtom = Atom.make(0)
 
 function Counter() {
@@ -493,7 +500,7 @@ function Counter() {
 ### FORBIDDEN: Imperative Updates from React Components
 
 ```typescript
-// WRONG - doesn't trigger React re-renders
+// WRONG, does not trigger React re-renders
 export const openModal = (type: string) => {
     Atom.batch(() => {
         Atom.update(modalAtomFamily(type), (s) => ({ ...s, isOpen: true }))
@@ -504,7 +511,7 @@ function Component() {
     return <button onClick={() => openModal("settings")}>Open</button>
 }
 
-// CORRECT - use hooks for React integration
+// CORRECT, use hooks for React integration
 export const useModal = (type: string) => {
     const state = useAtomValue(modalAtomFamily(type))
     const setState = useAtomSet(modalAtomFamily(type))
@@ -524,19 +531,19 @@ export const useModal = (type: string) => {
 **When imperative updates ARE acceptable:**
 - Event listeners outside React (keyboard shortcuts)
 - Effects running on atom changes
-- Non-UI state (analytics, logging)
+- Non UI state (analytics, logging)
 
 ### FORBIDDEN: Missing Finalizers
 
 ```typescript
-// WRONG - memory leak!
+// WRONG, memory leak!
 const scrollAtom = Atom.make((get) => {
     const onScroll = () => get.setSelf(window.scrollY)
     window.addEventListener("scroll", onScroll)
     return window.scrollY
 })
 
-// CORRECT - cleanup registered
+// CORRECT, cleanup registered
 const scrollAtom = Atom.make((get) => {
     const onScroll = () => get.setSelf(window.scrollY)
     window.addEventListener("scroll", onScroll)
@@ -548,21 +555,21 @@ const scrollAtom = Atom.make((get) => {
 ### FORBIDDEN: Missing keepAlive for Global State
 
 ```typescript
-// WRONG - state resets when component unmounts
+// WRONG, state resets when component unmounts
 export const modalStateAtom = Atom.make({ isOpen: false })
 
-// CORRECT - state persists
+// CORRECT, state persists
 export const modalStateAtom = Atom.make({ isOpen: false }).pipe(Atom.keepAlive)
 ```
 
 ### FORBIDDEN: Ignoring AsyncResult States
 
 ```typescript
-// WRONG - doesn't handle loading/error states
+// WRONG, does not handle loading and error states
 const userResult = useAtomValue(userAtom)
 return <div>Hello, {userResult.name}</div> // Type error!
 
-// CORRECT - match all states
+// CORRECT, match all states
 const userResult = useAtomValue(userAtom)
 return AsyncResult.match(userResult, {
     onInitial: () => <div>Loading...</div>,
@@ -574,14 +581,14 @@ return AsyncResult.match(userResult, {
 ### FORBIDDEN: Updating State During Render
 
 ```typescript
-// WRONG - side effect during render
+// WRONG, side effect during render
 function Component() {
     const count = useAtomValue(countAtom)
     Atom.set(countAtom, count + 1) // Never do this!
     return <div>{count}</div>
 }
 
-// CORRECT - use effects or event handlers
+// CORRECT, use effects or event handlers
 function Component() {
     const count = useAtomValue(countAtom)
     const setCount = useAtomSet(countAtom)
@@ -597,7 +604,7 @@ function Component() {
 ### FORBIDDEN: useState for Mutation Loading State
 
 ```typescript
-// WRONG - manual loading state management
+// WRONG, manual loading state management
 function DeleteDialog({ id }: { id: string }) {
     const [, deleteThing] = useAtom(deleteMutation, { mode: "promise" })
     const [isLoading, setIsLoading] = useState(false)
@@ -612,7 +619,7 @@ function DeleteDialog({ id }: { id: string }) {
     }
 }
 
-// CORRECT - derive from result.waiting
+// CORRECT, derive from result.waiting
 function DeleteDialog({ id }: { id: string }) {
     const [result, deleteThing] = useAtom(deleteMutation, { mode: "promise" })
     const isLoading = result.waiting
@@ -630,7 +637,7 @@ function DeleteDialog({ id }: { id: string }) {
 ### FORBIDDEN: Mutations in Parent Components
 
 ```typescript
-// WRONG - parent manages the mutation
+// WRONG, parent manages the mutation
 function PaywallPage() {
     const [result, archivePaywall] = useAtom(archivePaywallMutation, { mode: "promise" })
 
@@ -642,7 +649,7 @@ function PaywallPage() {
     return <ConfirmDialog onConfirm={handleArchive} loading={result.waiting} />
 }
 
-// CORRECT - dialog owns its mutation
+// CORRECT, dialog owns its mutation
 function PaywallPage() {
     return <ArchivePaywallDialog paywall={paywall} onSuccess={() => navigate("/paywalls")} />
 }
@@ -654,11 +661,11 @@ function PaywallPage() {
 ### Selective Re-rendering
 
 ```typescript
-// WRONG - subscribes to entire state
+// WRONG, subscribes to entire state
 const state = useAtomValue(appStateAtom)
 const userName = state.user.name
 
-// CORRECT - derive focused atom
+// CORRECT, derive focused atom
 const userNameAtom = Atom.map(appStateAtom, (state) => state.user.name)
 const userName = useAtomValue(userNameAtom)
 ```
@@ -667,12 +674,12 @@ const userName = useAtomValue(userNameAtom)
 
 Use `Atom.keepAlive` for:
 - Global application state
-- Modal/dialog state
+- Modal and dialog state
 - User preferences
 - Authentication state
 - Frequently accessed derived state
 
 Skip `keepAlive` for:
-- Component-local state that should reset
+- Component local state that should reset
 - Temporary form state
 - State tied to component lifecycle

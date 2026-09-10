@@ -1,14 +1,11 @@
-# RPC & Cluster Patterns
+# RPC and Cluster Patterns
 
-> **Effect v4.** `@effect/rpc`, `@effect/cluster`, and `@effect/workflow` were absorbed into core
-> `effect` as `effect/unstable/rpc`, `effect/unstable/cluster`, and `effect/unstable/workflow`.
-> The RPC contract shape changed the most: `RpcGroup.make` is now variadic over `Rpc.make(...)`
-> values, and there is no `Rpc.query` / `Rpc.mutation` split.
+> **Effect v4.** RPC modules live in `effect/unstable/rpc`. Cluster modules live in
+> `effect/unstable/cluster`. Workflow modules live in `effect/unstable/workflow`.
 
 ## RpcGroup for API Organization
 
-**Use `Rpc.make` for each endpoint and `RpcGroup.make` to collect them.** v3's
-`RpcGroup.make(name, { record })` form is gone:
+**Use `Rpc.make` for each endpoint and `RpcGroup.make` to collect them:**
 
 ```typescript
 import { Rpc, RpcGroup } from "effect/unstable/rpc"
@@ -51,27 +48,25 @@ export const UserRpcs = RpcGroup.make(
 
 ### Rpc.make Options
 
-| Option | Purpose |
-| --- | --- |
-| `payload` | Request schema, a `Schema.Struct` or a bare fields object |
-| `success` | Success schema (defaults to `Schema.Void`) |
-| `error` | Error schema (defaults to `Schema.Never`) |
-| `stream` | `true` for a streaming response |
-| `primaryKey` | Derives a request identity, needed for deduplication/persistence |
-| `defect` | Schema for defects (defaults to `Schema.Defect()`) |
+| Option       | Purpose                                                        |
+| ------------ | -------------------------------------------------------------- |
+| `payload`    | Request schema, a `Schema.Struct` or a bare fields object      |
+| `success`    | Success schema, defaults to `Schema.Void`                      |
+| `error`      | Error schema, defaults to `Schema.Never`                       |
+| `stream`     | `true` for a streaming response                                |
+| `primaryKey` | Derives a request identity, needed for deduplication           |
+| `defect`     | Schema for defects, defaults to `Schema.Defect()`              |
 
-v3's naming changed: `input` → `payload`, `output` → `success`. `success` and `error` are
-optional now. Omit `error` rather than writing `Schema.Never`, and omit `success` for a
-void response.
+`success` and `error` are optional. Omit `error` rather than writing `Schema.Never`, and omit
+`success` for a void response.
 
-There is no `Rpc.query` / `Rpc.mutation` distinction in v4. Where the read/write difference
-matters operationally, express it with annotations (e.g. `Persisted`, `Uninterruptible`) rather
-than separate constructors. `Schema.TaggedRequest` classes are no longer auto-converted into
-RPCs. Declare each contract explicitly with `Rpc.make`.
+Model read and write differences with annotations (for example `Persisted` or
+`Uninterruptible`) where the distinction matters operationally. Declare each contract
+explicitly with `Rpc.make`.
 
 ## Error Unions in RPC
 
-**Always use explicit error unions.** Note `Schema.Union` takes one array in v4:
+**Always use explicit error unions.** `Schema.Union` takes one array:
 
 ```typescript
 // Explicit union of possible errors
@@ -86,18 +81,18 @@ Rpc.make("create", {
     ]),
 })
 
-// NOT - generic error type
+// NOT a generic error type
 Rpc.make("create", {
     payload: CreateOrderInput,
     success: Order,
-    error: GenericError, // WRONG - loses type information
+    error: GenericError, // WRONG, loses type information
 })
 ```
 
 ## RPC Middleware for Authentication
 
-v3's `RpcMiddleware.Tag` is now `RpcMiddleware.Service`, configured with `requires` / `provides`
-/ `clientError` type parameters and an options object:
+`RpcMiddleware.Service` is configured with `requires`, `provides`, and `error` type parameters
+plus an options object:
 
 ```typescript
 import { Rpc, RpcMiddleware } from "effect/unstable/rpc"
@@ -109,7 +104,7 @@ export class CurrentUser extends Context.Service<
     { id: UserId; role: UserRole; organizationId: OrganizationId }
 >()("CurrentUser") {}
 
-// Auth middleware, `failure` became `error`
+// Auth middleware
 export class AuthMiddleware extends RpcMiddleware.Service<
     AuthMiddleware,
     { provides: CurrentUser }
@@ -150,12 +145,12 @@ export const ProtectedUserRpcs = UserRpcs.middleware(AuthMiddleware)
 ```
 
 Set `requiredForClient: true` in the options when the client must supply the middleware too.
-The middleware's `provides` metadata removes that service from each handler's requirements, so
+The middleware `provides` metadata removes that service from each handler requirements, so
 handlers can yield `CurrentUser` without declaring it.
 
 ## Workflow Definition
 
-**Use `Workflow.make(tag, options)`.** The name moved from an option to the first argument:
+**Use `Workflow.make(tag, options)`.** The name is the first argument:
 
 ```typescript
 import { Workflow } from "effect/unstable/workflow"
@@ -184,9 +179,8 @@ export const NotificationWorkflow = Workflow.make("NotificationWorkflow", {
 })
 ```
 
-`idempotencyKey` is **required** in v4. Workflow definitions expose `_tag` and are
-class-compatible constructors, so a separate `id` field in the payload is no longer needed for
-identity, because the idempotency key serves that role.
+`idempotencyKey` is **required**. Workflow definitions expose `_tag` and work as constructors.
+Use the idempotency key for identity.
 
 ### Workflow Implementation
 
@@ -254,11 +248,11 @@ export const OrderFulfillmentWorkflowLayer = OrderFulfillmentWorkflow.toLayer(
 
 ## Activity Patterns
 
-`Activity.make` keeps its v3 shape. **Always include `success` and `error` schemas** when the
-activity produces or fails with a value. They're what survives a workflow restart:
+**Always include `success` and `error` schemas** when the activity produces or fails with a
+value. The schemas are what survives a workflow restart:
 
 ```typescript
-// CORRECT - schemas specified
+// CORRECT, schemas specified
 yield* Activity.make({
     name: "SendEmail",
     success: EmailSentResult,
@@ -270,7 +264,7 @@ yield* Activity.make({
     }),
 })
 
-// WRONG - result can't be replayed across restarts
+// WRONG, result cannot be replayed across restarts
 yield* Activity.make({
     name: "SendEmail",
     execute: Effect.gen(function* () {
@@ -280,9 +274,9 @@ yield* Activity.make({
 ```
 
 `success` defaults to `Schema.Void` and `error` to `Schema.Never`, so omitting them is correct
-for a genuinely void, infallible activity, but never when the activity returns data.
+for a void, infallible activity, and incorrect when the activity returns data.
 
-`interruptRetryPolicy` is available for controlling retry-on-interrupt behavior per activity.
+`interruptRetryPolicy` controls retry on interrupt behavior per activity.
 
 ### Activity Error Handling with Retryable
 
@@ -321,8 +315,8 @@ yield* Activity.make({
 
 ## ClusterCron for Scheduled Jobs
 
-`ClusterCron.make` returns a `Layer` directly and takes the work inline as `execute`. There is
-no separate `.toLayer` step. The schedule is a parsed `Cron`, not a raw string:
+`ClusterCron.make` returns a `Layer` directly and takes the work inline as `execute`. The
+schedule is a parsed `Cron`:
 
 ```typescript
 import { Cron, Effect } from "effect"
@@ -343,9 +337,9 @@ export const DailyReportCronLayer = ClusterCron.make({
 })
 ```
 
-Use `Cron.parse(expr)` when you want the `Result` rather than a throwing parse. Other options:
-`shardGroup` to pin the job to a shard group, `calculateNextRunFromPrevious`, and
-`skipIfOlderThan` (defaults to `"1 day"`) to skip badly-delayed runs.
+Use `Cron.parse(expr)` when you want the `Result` form. Other options include `shardGroup` to
+pin the job to a shard group, `calculateNextRunFromPrevious`, and `skipIfOlderThan` (defaults
+to `"1 day"`) to skip badly delayed runs.
 
 The layer requires `Sharding`, so provide your cluster layer beneath it.
 
@@ -366,13 +360,12 @@ const OrdersApiLive = HttpApiBuilder.group(Api, "orders", (handlers) =>
     handlers.handle("createOrder", ({ payload }) =>
         Effect.gen(function* () {
             const orders = yield* OrderService
-            const workflows = yield* WorkflowClient
 
             // Create order in database
             const order = yield* orders.create(payload)
 
             // Trigger async fulfillment workflow
-            yield* workflows.workflows.OrderFulfillmentWorkflow.execute({
+            yield* OrderFulfillmentWorkflow.execute({
                 orderId: order.id,
                 userId: payload.userId,
                 items: payload.items,
@@ -385,19 +378,21 @@ const OrdersApiLive = HttpApiBuilder.group(Api, "orders", (handlers) =>
 )
 ```
 
+`execute` requires the `WorkflowEngine` service, provided by the cluster workflow
+engine layer at the application root.
+
 ### From a Backend Service
 
 ```typescript
 export class MessageService extends Context.Service<MessageService>()("MessageService", {
     make: Effect.gen(function* () {
         const repo = yield* MessageRepo
-        const workflows = yield* WorkflowClient
 
         const create = Effect.fn("MessageService.create")(function* (input: CreateMessageInput) {
             const message = yield* repo.create(input)
 
             // Trigger notification workflow
-            yield* workflows.workflows.NotificationWorkflow.execute({
+            yield* NotificationWorkflow.execute({
                 messageId: message.id,
                 channelId: message.channelId,
                 authorId: message.authorId,
@@ -410,18 +405,21 @@ export class MessageService extends Context.Service<MessageService>()("MessageSe
     }),
 }) {
     static readonly layer = Layer.effect(this, this.make).pipe(
-        Layer.provide([MessageRepo.layer, WorkflowClient.layer]),
+        Layer.provide(MessageRepo.layer),
     )
 }
 ```
 
+Both call sites require `WorkflowEngine` in the effect's requirements. Provide it once at the
+root with the cluster workflow engine layer, the same layer that runs registered workflows.
+
 ## Import Reference
 
-| v3 package | v4 path |
-| --- | --- |
-| `@effect/rpc` | `effect/unstable/rpc` (`Rpc`, `RpcGroup`, `RpcClient`, `RpcServer`, `RpcMiddleware`, `RpcSerialization`, `RpcTest`) |
-| `@effect/cluster` | `effect/unstable/cluster` (`Sharding`, `Entity`, `Singleton`, `ClusterCron`, `ClusterSchema`, `MessageStorage`, …) |
-| `@effect/workflow` | `effect/unstable/workflow` (`Workflow`, `Activity`) |
+| Module                          | Path                      | Exports                                                            |
+| ------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| RPC                             | `effect/unstable/rpc`     | `Rpc`, `RpcGroup`, `RpcClient`, `RpcServer`, `RpcMiddleware`        |
+| Cluster                         | `effect/unstable/cluster` | `Sharding`, `Entity`, `Singleton`, `ClusterCron`, `ClusterSchema`   |
+| Workflow                        | `effect/unstable/workflow`| `Workflow`, `Activity`                                             |
 
-All three are **unstable modules**. They may take breaking changes in minor releases. Pin your
-Effect version if you depend on them heavily. See `v4-semantics.md`.
+All three are **unstable modules**. Pin your Effect version if you depend on them heavily. See
+`v4-semantics.md`.

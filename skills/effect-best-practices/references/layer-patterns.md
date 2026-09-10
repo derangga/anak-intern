@@ -77,7 +77,7 @@ const program = Effect.gen(function* () {
 )
 ```
 
-The upside in v4: because the requirement is visible in the layer's type, forgetting one is a
+Because the requirement is visible in the layer's type, forgetting one is a
 compile error at the definition site rather than a mystery at the app root.
 
 ## Infrastructure Layers
@@ -93,13 +93,13 @@ dependencies because:
 // Infrastructure can be provided at app root
 import { PgClient } from "@effect/sql-pg"
 
-// Config-driven: layerConfig, not layer (v4 split these)
+// Config-driven variant uses layerConfig
 const DatabaseLive = PgClient.layerConfig({
-    host: Config.string("DB_HOST"),
-    port: Config.int("DB_PORT"),
-    database: Config.string("DB_NAME"),
-    username: Config.string("DB_USER"),
-    password: Config.redacted("DB_PASSWORD"),
+    host: Config.String("DB_HOST"),
+    port: Config.Int("DB_PORT"),
+    database: Config.String("DB_NAME"),
+    username: Config.String("DB_USER"),
+    password: Config.Redacted("DB_PASSWORD"),
 })
 
 // Services use the database but don't provide it in their own layer
@@ -213,15 +213,13 @@ const AppLive = RepoLive.pipe(
 )
 ```
 
-### v4 change: memoization is shared across `Effect.provide` calls
+### Shared memoization across `Effect.provide` calls
 
-In v3, each `Effect.provide` call had its **own** memo map, so two provide calls with
-overlapping layers silently built those layers twice, a classic source of duplicate database
-pools. In v4 the `MemoMap` is shared across provide calls on the same fiber, so this now builds
-one instance:
+The `MemoMap` is shared across provide calls on the same fiber, so overlapping layers build
+one instance. This avoids duplicate database pools:
 
 ```typescript
-// v3: DatabaseLive built TWICE. v4: built ONCE.
+// DatabaseLive built ONCE.
 const program = myEffect.pipe(
     Effect.provide(UserRepo.layer),
     Effect.provide(OrderRepo.layer),
@@ -247,7 +245,7 @@ const program = myEffect.pipe(
     Effect.provide(Layer.fresh(DatabaseLive)), // built again, separately
 )
 
-// { local: true } - new in v4, isolates an entire layer subtree
+// { local: true } isolates an entire layer subtree
 const program = myEffect.pipe(
     Effect.provide(AppLive),
     Effect.provide(TestHarnessLive, { local: true }), // own memo map
@@ -285,6 +283,7 @@ const AppLive = Layer.mergeAll(Layer1, Layer2).pipe(
 ```
 
 **Recommendations:**
+
 - Prefer `Layer.mergeAll` for layers at the same level
 - Pass an array to a single `Layer.provide` rather than chaining calls
 - Use `Layer.provideMerge` when you need the provided services in the output
@@ -334,23 +333,24 @@ export class ElectricEventQueue extends Context.Service<ElectricEventQueue>()(
 
 // Usage
 const EventQueueLive = ElectricEventQueue.layerConfig({
-    maxRetries: Config.int("EVENT_QUEUE_MAX_RETRIES").pipe(
+    maxRetries: Config.Int("EVENT_QUEUE_MAX_RETRIES").pipe(
         Config.withDefault(3)
     ),
-    batchSize: Config.int("EVENT_QUEUE_BATCH_SIZE").pipe(
+    batchSize: Config.Int("EVENT_QUEUE_BATCH_SIZE").pipe(
         Config.withDefault(100)
     ),
-    pollInterval: Config.int("EVENT_QUEUE_POLL_INTERVAL").pipe(
+    pollInterval: Config.Int("EVENT_QUEUE_POLL_INTERVAL").pipe(
         Config.withDefault(1000)
     ),
 })
 ```
 
-v4 details in that example: the wrapper type is `Config.Wrap<T>` (not `Config.Config.Wrap`),
-the error is `Config.ConfigError` (the `ConfigError` module is gone), `Config.integer` is now
-`Config.int`, and `Layer.unwrapEffect` is now `Layer.unwrap`.
+Details in that example: the wrapper type is `Config.Wrap<T>`,
+the error is `Config.ConfigError`, integer config uses
+`Config.Int`, and effect lifting uses `Layer.unwrap`.
 
 This pattern:
+
 - Separates configuration from implementation
 - Returns `ConfigError` for missing/invalid config
 - Allows different configs per environment
@@ -358,8 +358,7 @@ This pattern:
 
 ## Layer Naming Conventions
 
-v4 standardizes on `layer` as the primary layer name. Use descriptive suffixes for variants
-rather than v3's `Live` / `Default` convention:
+Use `layer` as the primary layer name. Use descriptive suffixes for variants:
 
 | Name | Purpose |
 | --- | --- |
@@ -425,9 +424,9 @@ import { Config, Effect, Layer } from "effect"
 // Layer that depends on config
 const ApiClientLive = Layer.unwrap(
     Effect.gen(function* () {
-        const apiKey = yield* Config.string("API_KEY")
-        const baseUrl = yield* Config.string("API_BASE_URL")
-        const timeout = yield* Config.int("API_TIMEOUT").pipe(
+        const apiKey = yield* Config.String("API_KEY")
+        const baseUrl = yield* Config.String("API_BASE_URL")
+        const timeout = yield* Config.Int("API_TIMEOUT").pipe(
             Config.withDefault(5000)
         )
 
@@ -442,9 +441,9 @@ const ApiClientLive = Layer.unwrap(
 const ValidatedConfigLive = Layer.unwrap(
     Effect.gen(function* () {
         const config = yield* Config.all({
-            dbUrl: Config.string("DATABASE_URL"),
-            redisUrl: Config.string("REDIS_URL"),
-            port: Config.int("PORT"),
+            dbUrl: Config.String("DATABASE_URL"),
+            redisUrl: Config.String("REDIS_URL"),
+            port: Config.Int("PORT"),
         })
 
         // Validate config
@@ -457,12 +456,12 @@ const ValidatedConfigLive = Layer.unwrap(
 )
 ```
 
-For validation attached to the config itself rather than a wrapper layer, prefer
-`Config.schema(schema.check(...), path)`. v4 moved `Config.validate` into Schema checks.
+For validation attached to the config itself rather than a wrapper layer, use
+`Config.schema(schema.check(...), path)`, which applies Schema checks.
 
 ## Scoped Layers
 
-`Layer.scoped` is gone in v4. Scoped acquisition merged into `Layer.effect`, which supplies
+`Layer.effect` handles scoped acquisition. It supplies
 the layer's `Scope` and excludes it from the requirements:
 
 ```typescript
@@ -562,7 +561,7 @@ const LoggerLive = Layer.effect(
 
 ## Deferred Layer Construction
 
-For expensive initialization that should be deferred, use `Layer.suspend` (v3's `Layer.lazy`):
+For expensive initialization that should be deferred, use `Layer.suspend`:
 
 ```typescript
 const ExpensiveServiceLive = Layer.suspend(() => {

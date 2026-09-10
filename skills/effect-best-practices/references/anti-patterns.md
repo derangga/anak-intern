@@ -1,9 +1,8 @@
 # Anti-Patterns (Forbidden)
 
-These patterns are **never acceptable** in Effect-TS code. Each is listed with rationale and the correct alternative.
+These patterns are **never acceptable** in Effect code. Each is listed with rationale and the correct alternative.
 
-> **Effect v4.** Examples use `Context.Service` (v3's `Effect.Service` and `Context.Tag` are
-> both gone) and `Effect.catch` (v3's `catchAll`). See `v4-semantics.md` for behavior changes.
+> **Effect v4.** Examples use `Context.Service` and `Effect.catch`.
 
 ## FORBIDDEN: Effect.runSync/runPromise Inside Services
 
@@ -21,9 +20,10 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 }) {}
 ```
 
-**Why:** Breaks Effect's composition model, loses error handling, can't be tested, loses tracing.
+**Why:** Breaks Effect composition model, loses error handling, cannot be tested, loses tracing.
 
 **Correct:**
+
 ```typescript
 const findById = Effect.fn("UserService.findById")(function* (id: UserId) {
     return yield* repo.findById(id)
@@ -43,9 +43,10 @@ yield* Effect.gen(function* () {
 })
 ```
 
-**Why:** Throws bypass Effect's error channel, can't be caught with `catchTag`, breaks type safety.
+**Why:** Throws bypass Effect error channel, cannot be caught with `catchTag`, breaks type safety.
 
 **Correct:**
+
 ```typescript
 yield* Effect.gen(function* () {
     const user = yield* repo.findById(id)
@@ -59,7 +60,7 @@ yield* Effect.gen(function* () {
 ## FORBIDDEN: Effect.catch Losing Type Information
 
 ```typescript
-// FORBIDDEN: Effect.catch is v3's Effect.catchAll, renamed in v4
+// FORBIDDEN
 yield* someEffect.pipe(
     Effect.catch((err) =>
         Effect.fail(new GenericError({ message: "Something failed" }))
@@ -70,6 +71,7 @@ yield* someEffect.pipe(
 **Why:** Loses specific error information, makes debugging harder, prevents specific error handling downstream.
 
 **Correct:**
+
 ```typescript
 yield* someEffect.pipe(
     Effect.catchTags({
@@ -87,9 +89,10 @@ const data = someValue as any
 const result = (await fetch(url)) as unknown as MyType
 ```
 
-**Why:** Completely bypasses type safety, can cause runtime errors, loses Effect's type guarantees.
+**Why:** Completely bypasses type safety, can cause runtime errors, loses Effect type guarantees.
 
 **Correct:**
+
 ```typescript
 // Use Schema for parsing unknown data
 const result = yield* Schema.decodeUnknownEffect(MyType)(someValue)
@@ -115,9 +118,10 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 }) {}
 ```
 
-**Why:** Loses Effect's error handling, can't compose with other Effects, loses tracing/metrics.
+**Why:** Loses Effect error handling, cannot compose with other Effects, loses tracing and metrics.
 
 **Correct:**
+
 ```typescript
 const findById = Effect.fn("UserService.findById")(
     function* (id: UserId): Effect.Effect<User, UserNotFoundError> {
@@ -134,9 +138,10 @@ console.log("Processing order:", orderId)
 console.error("Error:", error)
 ```
 
-**Why:** Not structured, not captured by Effect's logging system, lost in production telemetry.
+**Why:** Not structured, not captured by Effect logging system, lost in production telemetry.
 
 **Correct:**
+
 ```typescript
 yield* Effect.log("Processing order", { orderId })
 yield* Effect.logError("Operation failed", { error: String(error) })
@@ -153,42 +158,46 @@ const port = parseInt(process.env.PORT || "3000")
 **Why:** No validation, no type safety, fails silently if missing, hard to test.
 
 **Correct:**
+
 ```typescript
 const config = yield* Config.all({
-    apiKey: Config.redacted("API_KEY"),
-    port: Config.int("PORT").pipe(Config.withDefault(3000)),
+    apiKey: Config.Redacted("API_KEY"),
+    port: Config.Int("PORT").pipe(Config.withDefault(3000)),
 })
 ```
 
-## FORBIDDEN: Config.secret (Deprecated)
+## FORBIDDEN: Logging Redacted Secrets
 
 ```typescript
-// FORBIDDEN (deprecated)
-const secretConfig = Config.all({
-    apiKey: Config.secret("API_KEY"),
-    dbPassword: Config.secret("DB_PASSWORD"),
+// FORBIDDEN
+const program = Effect.gen(function* () {
+    const apiKey = yield* Config.Redacted("API_KEY")
+    yield* Effect.log("Using key", { key: Redacted.value(apiKey) }) // leaks the secret
+    return apiKey
 })
 ```
 
-**Why:** `Config.secret` was **removed** in v4. Use `Config.redacted`, which already returns `Redacted<string>`.
+**Why:** Unwrapping a `Redacted` value into logs exposes secrets in plain text in telemetry.
 
 **Correct:**
+
 ```typescript
 import { Config, Redacted } from "effect"
 
 const secretConfig = Config.all({
-    apiKey: Config.redacted("API_KEY"),           // Returns Redacted<string>
-    dbPassword: Config.redacted("DB_PASSWORD"),
+    apiKey: Config.Redacted("API_KEY"), // Returns Redacted<string>
+    dbPassword: Config.Redacted("DB_PASSWORD"),
 })
 
-// Using redacted values
+// Using redacted values, unwrap only at the boundary that needs the raw value
 const program = Effect.gen(function* () {
     const { apiKey } = yield* secretConfig
-    const key = Redacted.value(apiKey)  // Unwrap when needed
+    yield* Effect.log("API key loaded", { key: apiKey }) // Redacted stays opaque
+    const key = Redacted.value(apiKey) // Unwrap when calling the external client
 })
 
-// To redact a non-string config, map it. v4 removed the Config-argument overload
-const secretNumber = Config.map(Config.int("SECRET_PORT"), Redacted.make)
+// To redact a non-string config, map it
+const secretNumber = Config.map(Config.Int("SECRET_PORT"), Redacted.make)
 //    ^? Config<Redacted<number>>
 ```
 
@@ -203,9 +212,10 @@ type User = {
 }
 ```
 
-**Why:** Null/undefined handling is error-prone, loses the explicit "absence" semantics.
+**Why:** Null and undefined handling is error prone, loses the explicit absence semantics.
 
 **Correct:**
+
 ```typescript
 const User = Schema.Struct({
     name: Schema.String,
@@ -222,9 +232,10 @@ const user = Option.getOrThrow(maybeUser)
 const name = pipe(maybeName, Option.getOrThrow)
 ```
 
-**Why:** Throws exceptions, bypasses Effect's error handling, fails at runtime instead of compile time.
+**Why:** Throws exceptions, bypasses Effect error handling, fails at runtime instead of compile time.
 
 **Correct:**
+
 ```typescript
 // Handle both cases explicitly
 yield* Option.match(maybeUser, {
@@ -253,7 +264,7 @@ program.pipe(Effect.provideService(UserService, { findById: ... }))
 ```
 
 **Why:** The construction logic has no single home, so it gets duplicated and drifts. Nothing
-declares the service's own dependencies, so every caller has to know them.
+declares the service own dependencies, so every caller has to know them.
 
 **Correct:** give the service a `make` and a `static layer` that satisfies everything `make`
 requires:
@@ -272,33 +283,34 @@ export class UserService extends Context.Service<UserService>()("UserService", {
 }
 ```
 
-A service **without** `make` is still correct for infrastructure injected by the runtime
-(Cloudflare KV, worker bindings), which is the v4 replacement for v3's `Context.Tag`. The
-anti-pattern is using that shape for logic you construct yourself. See `service-patterns.md`.
+A service **without** `make` is correct for infrastructure injected by the runtime
+(Cloudflare KV, worker bindings). The anti-pattern is using that shape for logic you construct
+yourself. See `service-patterns.md`.
 
 ## FORBIDDEN: Yielding Non-Effect Values
 
 ```typescript
-// FORBIDDEN in v4, all three compiled in v3
-const value = yield* ref        // Ref was an Effect subtype
-const result = yield* deferred  // Deferred was an Effect subtype
-const output = yield* fiber     // Fiber was an Effect subtype
+// FORBIDDEN
+const value = yield* ref        // Ref is a plain value, use Ref.get
+const result = yield* deferred  // Deferred is a plain value, use Deferred.await
+const output = yield* fiber     // Fiber is a plain value, use Fiber.join
 ```
 
-**Why:** v4 replaced Effect subtyping with the `Yieldable` trait. `Ref`, `Deferred`, and `Fiber`
-are plain values now. The ambiguity between "I have a Ref" and "I have an Effect that reads the
-Ref" caused silent bugs (e.g. `Effect.all([refA, refB])` quietly reading both instead of failing
-to type-check).
+**Why:** `Ref`, `Deferred`, and `Fiber` are plain values. Yielding them directly is a type error
+that hides intent. The ambiguity between "I have a Ref" and "I have an Effect that reads the
+Ref" causes silent bugs (for example `Effect.all([refA, refB])` reading both when you meant to
+pass the handles).
 
 **Correct:**
+
 ```typescript
 const value = yield* Ref.get(ref)
 const result = yield* Deferred.await(deferred)
 const output = yield* Fiber.join(fiber)
 ```
 
-`Option`, `Result`, `Config`, and `Context.Service` remain yieldable. Passing one to a
-combinator (rather than yielding it) needs an explicit `.asEffect()`. See `v4-semantics.md`.
+`Option`, `Config`, and `Context.Service` are yieldable. Passing one to a
+combinator (rather than yielding it) needs an explicit `.asEffect()`.
 
 ## FORBIDDEN: Ignoring Errors with orDie
 
@@ -310,11 +322,13 @@ yield* someEffect.pipe(Effect.orDie)
 **Why:** Converts recoverable errors to defects (unrecoverable), loses error information.
 
 **Acceptable exceptions:**
+
 - Truly unrecoverable situations (invalid program state)
 - After exhausting all recovery options
 - In test setup code
 
 **Correct:**
+
 ```typescript
 // Handle errors explicitly
 yield* someEffect.pipe(
@@ -333,9 +347,10 @@ yield* effect.pipe(
 )
 ```
 
-**Why:** Loses error type information, can't discriminate between error types.
+**Why:** Loses error type information, cannot discriminate between error types.
 
 **Correct:**
+
 ```typescript
 yield* effect.pipe(
     Effect.catchTag("SpecificError", (err) =>
@@ -359,6 +374,7 @@ const result = await someEffect.pipe(
 **Why:** Loses Effect composition benefits, error handling becomes inconsistent.
 
 **Correct:**
+
 ```typescript
 const program = Effect.gen(function* () {
     const data = yield* someEffect
@@ -379,6 +395,7 @@ const increment = Effect.sync(() => { counter++ })
 **Why:** Race conditions, not testable, not composable, breaks referential transparency.
 
 **Correct:**
+
 ```typescript
 const program = Effect.gen(function* () {
     const counter = yield* Ref.make(0)
@@ -395,9 +412,10 @@ const now = new Date()
 const timestamp = Date.now()
 ```
 
-**Why:** Not testable, introduces non-determinism, hard to mock in tests. See also [#24: Using Impure Functions Directly in Business Logic](#forbidden-using-impure-functions-directly-in-business-logic) for the general principle.
+**Why:** Not testable, introduces non-determinism, hard to mock in tests.
 
 **Correct:**
+
 ```typescript
 import { Clock } from "effect"
 
@@ -427,6 +445,7 @@ step1().pipe(
 **Why:** Creates callback hell, difficult to read, debug, and maintain. Effect provides `Effect.gen` specifically to avoid this.
 
 **Correct:**
+
 ```typescript
 const program = Effect.gen(function* () {
     const a = yield* step1()
@@ -439,18 +458,19 @@ const program = Effect.gen(function* () {
 ## FORBIDDEN: Treating Effects as Eager (Like Promises)
 
 ```typescript
-// FORBIDDEN - assuming Effect executes on creation
+// FORBIDDEN, assuming Effect executes on creation
 const myEffect = Effect.log("Hello") // Nothing happens here!
 // Unlike Promises, Effects are lazy blueprints
 const myPromise = Promise.resolve("Hello") // Executes immediately
 
-// FORBIDDEN - storing Effect results without yielding
-const result = Effect.succeed(42) // This is still an Effect, not 42
+// FORBIDDEN, storing Effect results without yielding
+const result = Effect.succeed(42) // This is an Effect, not 42
 ```
 
-**Why:** Effects are lazy, immutable blueprints. They describe computations but do nothing until explicitly run via `Effect.runPromise`, `Effect.runSync`, or yielded inside `Effect.gen`. Treating them as eager leads to code that silently does nothing.
+**Why:** Effects are lazy, immutable blueprints. They describe computations but do nothing until explicitly run with `Effect.runPromise`, `Effect.runSync`, or yielded inside `Effect.gen`. Treating them as eager leads to code that silently does nothing.
 
 **Correct:**
+
 ```typescript
 const program = Effect.gen(function* () {
     yield* Effect.log("Hello") // Executed when program is run
@@ -471,14 +491,15 @@ const program = Effect.gen(function* () {
         return yield* useConnection(connection)
     } finally {
         // yield* CANNOT be used inside finally blocks!
-        yield* closeConnection(connection) // This won't work correctly
+        yield* closeConnection(connection) // This does not work correctly
     }
 })
 ```
 
-**Why:** `yield*` cannot be used inside `finally` blocks in generators. The cleanup effect won't execute properly. Additionally, manual cleanup is not interruption-safe. If the fiber is interrupted, the `finally` block may not run.
+**Why:** `yield*` cannot be used inside `finally` blocks in generators. The cleanup effect does not execute properly. Manual cleanup is not interruption safe. If the fiber is interrupted, the `finally` block may not run.
 
 **Correct:**
+
 ```typescript
 const program = Effect.acquireRelease(
     getDbConnection(),                       // acquire
@@ -513,9 +534,10 @@ async function fetchWithRetry() {
 }
 ```
 
-**Why:** Verbose, error-prone, doesn't compose, hard to test. Effect provides declarative, composable retry and timeout combinators.
+**Why:** Verbose, error prone, does not compose, hard to test. Effect provides declarative, composable retry and timeout combinators.
 
 **Correct:**
+
 ```typescript
 import { Duration, Effect, Schedule } from "effect"
 
@@ -532,16 +554,17 @@ const result = yield* api.fetchData().pipe(
 ## FORBIDDEN: Leaking Implementation Errors Across Boundaries
 
 ```typescript
-// FORBIDDEN - exposing database errors through the service API
+// FORBIDDEN, exposing database errors through the service API
 const findUser = (): Effect.Effect<
     User,
     ConnectionError | QueryError // Leaks infrastructure details!
 > => dbQuery()
 ```
 
-**Why:** Consumers of `findUser` shouldn't know or care about database-specific errors. If you swap the database, all callers must change. This is a leaky abstraction.
+**Why:** Consumers of `findUser` should not know about database specific errors. If you swap the database, all callers must change. This is a leaky abstraction.
 
 **Correct:**
+
 ```typescript
 class RepositoryError extends Data.TaggedError("RepositoryError")<{
     readonly cause: unknown
@@ -563,27 +586,28 @@ const userRoute = HttpApiEndpoint.get("getUser", "/users/:id", {
 })
 
 // Manually catching and mapping errors in each handler implementation
-const handleGetUser = HttpApiBuilder.endpoint(Api, "getUser", ({ params }) =>
+const handleGetUser = HttpApiBuilder.endpoint(Api, "users", "getUser", ({ params }) =>
     findUser(params.id).pipe(
         Effect.catchTag("UserNotFoundError", (e) =>
-            Effect.fail(new HttpApiError({ status: 404, message: e.message }))
+            Effect.fail(new ServiceError({ status: 404, message: e.message }))
         ),
     )
 )
 
 // Same error handling duplicated in every route...
-const handleDeleteUser = HttpApiBuilder.endpoint(Api, "deleteUser", ({ params }) =>
+const handleDeleteUser = HttpApiBuilder.endpoint(Api, "users", "deleteUser", ({ params }) =>
     deleteUser(params.id).pipe(
         Effect.catchTag("UserNotFoundError", (e) =>
-            Effect.fail(new HttpApiError({ status: 404, message: e.message }))
+            Effect.fail(new ServiceError({ status: 404, message: e.message }))
         ),
     )
 )
 ```
 
-**Why:** DRY violation. Error-to-status mapping is duplicated across every handler, making it easy to be inconsistent and hard to maintain.
+**Why:** DRY violation. Error to status mapping is duplicated across every handler, making it easy to be inconsistent and hard to maintain.
 
 **Correct:**
+
 ```typescript
 // Annotate the error type once with its HTTP status
 class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()(
@@ -599,7 +623,7 @@ const endpoint = HttpApiEndpoint.get("getUser", "/users/:id", {
 })
 
 // Handlers just fail normally, no manual mapping needed
-const handleGetUser = HttpApiBuilder.endpoint(Api, "getUser", ({ params }) =>
+const handleGetUser = HttpApiBuilder.endpoint(Api, "users", "getUser", ({ params }) =>
     findUser(params.id) // UserNotFoundError automatically becomes 404
 )
 ```
@@ -623,9 +647,10 @@ const processOrder = (
 processOrder(db, logger, mailer, config)
 ```
 
-**Why:** Doesn't scale. Adding a dependency forces changes in every caller up the chain. Makes refactoring painful and testing difficult.
+**Why:** Does not scale. Adding a dependency forces changes in every caller up the chain. Makes refactoring painful and testing difficult.
 
 **Correct:**
+
 ```typescript
 export class OrderService extends Context.Service<OrderService>()("OrderService", {
     make: Effect.gen(function* () {
@@ -667,9 +692,10 @@ const createUser = Effect.gen(function* () {
 })
 ```
 
-**Why:** Impure functions (`Math.random()`, `crypto.randomUUID()`, raw `fetch()`) are non-deterministic and create untestable code. They can't be mocked without monkey-patching, and their side effects aren't tracked by Effect.
+**Why:** Impure functions (`Math.random()`, `crypto.randomUUID()`, raw `fetch()`) are non-deterministic and create untestable code. They cannot be mocked without monkey patching, and their side effects are not tracked by Effect.
 
 **Correct:**
+
 ```typescript
 export class IdGenerator extends Context.Service<IdGenerator>()("IdGenerator", {
     make: Effect.sync(() => ({
@@ -707,6 +733,7 @@ const program = Effect.gen(function* () {
 **Why:** Forking and immediately joining is equivalent to running the effect directly, but with unnecessary overhead of creating a fiber. Fork is for true concurrency, running something in the background while doing other work.
 
 **Correct:**
+
 ```typescript
 // If you need the result immediately, just yield directly
 const program = Effect.gen(function* () {

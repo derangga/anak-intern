@@ -31,7 +31,7 @@ Rules that come with this runner:
 - **`it.effect` and `it.live` already provide and close a `Scope`** per test, so do not wrap test
   bodies in `Effect.scoped`.
 - **Use `assert`, not `expect`.** `@effect/vitest` re-exports everything from Vitest, so the
-  import is one line either way; `assert` is the convention.
+  import is one line either way. `assert` is the convention.
 - **Never `Effect.runSync` in tests.** Return the Effect from `it.effect` instead.
 - Use `it.layer(SomeLayer)("suite name", (it) => ...)` to share a layer across a whole suite,
   built once rather than per test.
@@ -111,8 +111,8 @@ identifier, so `class UserServiceInMemory extends Context.Service<UserService>()
 lands in the same slot. Prefer `layerTest` anyway: the string match is an unchecked convention
 that a typo breaks silently.
 
-Note that accessors are gone in v4. Tests must `yield* UserService` before calling methods,
-just like production code.
+Tests must `yield* UserService` before calling methods, just like production code. There are no
+accessor shortcuts.
 
 ### Wrong Pattern
 
@@ -125,7 +125,7 @@ const UserServiceTest = Layer.succeed(UserService, {
 ```
 
 `Layer.succeed` with `Service.of(...)` is fine for a **static** stub with no state. See
-`layer-patterns.md`. It's the wrong tool once the mock has to remember anything.
+`layer-patterns.md`. It is the wrong tool once the mock has to remember anything.
 
 ---
 
@@ -137,7 +137,7 @@ converts the error to a plain `Error`, discarding `_tag` and all context fields.
 ### Exit Inspection APIs
 
 | API | Purpose |
-|-----|---------|
+| ----- | --------- |
 | `Effect.exit(effect)` | Convert an Effect into one yielding `Exit<A, E>`, never failing |
 | `Exit.isFailure(exit)` | `true` if the Exit is a failure |
 | `Exit.isSuccess(exit)` | `true` if the Exit is a success |
@@ -146,8 +146,7 @@ converts the error to a plain `Error`, discarding `_tag` and all context fields.
 | `Cause.findErrorOption(cause)` | `Option<E>`, `Some(err)` for typed failures, `None` for defects |
 | `error._tag` | Discriminant on `Schema.TaggedError` to identify error type |
 
-`Cause.failureOption` was renamed to `Cause.findErrorOption` in v4. See the flattened `Cause`
-structure in `error-patterns.md`.
+The `Cause` structure is flattened. See `error-patterns.md`.
 
 ### Correct Pattern
 
@@ -197,8 +196,8 @@ file imports this shared layer. Per-test overrides use `TestLive.pipe(Layer.prov
 
 1. **Single source of truth.** Adding a new mock requires one change in `setup.ts`, not a hunt
    through every file.
-2. **Prevents drift.** Files can't accidentally omit a service or use a stale mock.
-3. **Layer memoization.** Shared infrastructure (e.g., in-memory DB) is instantiated once.
+2. **Prevents drift.** Files cannot accidentally omit a service or use a stale mock.
+3. **Layer memoization.** Shared infrastructure (for example in-memory DB) is instantiated once.
 4. **Easy overrides.** One-line per-test overrides without rebuilding the full composition.
 
 ### Correct Pattern
@@ -253,7 +252,7 @@ it.layer(TestLive)("UserService", (it) => {
 
 ### Test Isolation and Memoization
 
-v4 memoizes layers across `Effect.provide` calls, which is usually what you want in tests.
+Layers memoize across `Effect.provide` calls, which is the desired behavior in most tests.
 One in-memory database is shared by every mock in `TestLive`. When a test needs genuinely
 independent resources, opt out explicitly:
 
@@ -281,14 +280,14 @@ const TestLayer = Layer.mergeAll(
 const TestLayer = Layer.mergeAll(
     UserService.layerTest,
     OrderService.layerTest,
-    // ← missing! tests pass until a feature uses ProductService, then break
+    // missing entry here, tests pass until a feature uses ProductService, then break
 ).pipe(Layer.provide(InMemoryDatabaseLive))
 ```
 
 ### TestLive Structure Guidelines
 
 | Concern | Recommendation |
-|---------|----------------|
+| --------- | ---------------- |
 | File location | `test/setup.ts` or `test/layers.ts` |
 | Export name | `TestLive` (matches `AppLive` convention) |
 | Composition | `Layer.mergeAll(ServiceA.layerTest, ServiceB.layerTest, ...)` |
@@ -301,13 +300,12 @@ const TestLayer = Layer.mergeAll(
 ## Controlling Time with TestClock
 
 **Never use `Date.now()` or `new Date()`** in business logic. Use `Clock`, and drive it with
-`TestClock` in tests. v3's `TestContext.TestContext` is gone; `it.effect` provides the test
-services automatically, and the explicit layer is
-`Layer.mergeAll(TestConsole.layer, TestClock.layer())`.
+`TestClock` in tests. `it.effect` provides the test services automatically, and the explicit
+layer is `Layer.mergeAll(TestConsole.layer, TestClock.layer())`.
 
 ```typescript
 import { assert, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Fiber } from "effect"
 import { TestClock } from "effect/testing"
 
 it.effect("retries three times over increasing delays", () =>
@@ -324,8 +322,8 @@ it.effect("retries three times over increasing delays", () =>
 )
 ```
 
-Note `Effect.forkChild` (v3's `Effect.fork`) and `Fiber.join`. `Fiber` is no longer an Effect
-in v4, so `yield* fiber` is a type error. See `v4-semantics.md`.
+`Effect.forkChild` starts the background fiber and `Fiber.join` waits for its result. `Fiber`
+is a handle, not an `Effect`, so always join explicitly.
 
 ---
 
@@ -340,7 +338,7 @@ implementations.
 ### Common Impure Functions to Abstract
 
 | Impure Call | Service Abstraction | Effect Built-in |
-|-------------|--------------------|-|
+| ------------- | -------------------- | - |
 | `crypto.randomUUID()` | `IdGenerator` service | none |
 | `Math.random()` | `RandomNumber` service | none |
 | `Date.now()` / `new Date()` | Use `Clock` directly | `Clock.currentTimeMillis` |
@@ -436,9 +434,8 @@ it.effect("generates deterministic ids and invite codes", () =>
 ```
 
 Because `UserService.layer` bakes in the production `IdGenerator.layer` and `RandomNumber.layer`,
-the test rebuilds the layer from `UserService.make` with test dependencies instead. This is the
-v4 replacement for v3's trick of piping `UserService.Default` through `Layer.provide`. The
-`make` effect is exposed as a static, so you can rewire it freely.
+the test rebuilds the layer from `UserService.make` with test dependencies instead. The `make`
+effect is exposed as a static, so each test can rewire it freely.
 
 ### Wrong Pattern
 
@@ -455,3 +452,62 @@ const createUser = (input: { name: string; email: string }) =>
 vi.spyOn(crypto, "randomUUID").mockReturnValue("fixed-id" as any)
 // Global spy leaks between tests, requires restoration, tightly couples to platform API
 ```
+
+---
+
+## Property-Based Testing with Schema Arbitraries
+
+Schema arbitraries are native in Effect v4 and live in `effect/unstable/arbitrary`. Derive an
+`Arbitrary` from any Schema with `Arbitrary.schema`, then run property checks with
+`checkEffect` inside `it.effect`:
+
+```typescript
+import { assert, it } from "@effect/vitest"
+import { Effect } from "effect"
+import { Arbitrary } from "effect/unstable/arbitrary"
+
+// Reuse your domain schemas, the Arbitrary follows every check and brand
+const CreateUserInputArb = Arbitrary.schema(CreateUserInput)
+
+it.effect("created users always round-trip their fields", () =>
+    Arbitrary.checkEffect(CreateUserInputArb, (input) =>
+        Effect.gen(function* () {
+            const users = yield* UserService
+            const created = yield* users.create(input)
+            return created.email === input.email && created.name === input.name
+        }).pipe(Effect.provide(UserService.layerTest))
+    ).pipe(
+        Effect.tap((result) => {
+            const message = Arbitrary.formatCheckFailure(result)
+            if (message) {
+                // Fails the test with the shrunk counterexample
+                return Effect.fail(new Error(message))
+            }
+            return Effect.void
+        }),
+        Effect.asVoid,
+    )
+)
+```
+
+Notes:
+
+- `checkEffect` runs the property across generated inputs and shrinks the first falsification.
+  `Arbitrary.formatCheckFailure(result)` returns `undefined` for a passed result and a
+  diagnostic with the shrunk input otherwise. Check the `result._tag` directly when you need
+  the `Passed | Falsified | Exhausted | ReplayMismatch` distinction.
+- Properties must be deterministic per input and must not mutate generated values. Acquire any
+  stateful fixture inside each evaluation rather than sharing it across runs.
+- Use `Arbitrary.sampleEffect(arb, { count })` when you need a bounded batch of generated values
+  as fixtures, for example fuzzing a decoder:
+
+```typescript
+const users = yield* Arbitrary.sampleEffect(UserArb, { count: 100 })
+for (const user of users) {
+    const encoded = yield* Schema.encodeEffect(User)(user)
+    assert.deepStrictEqual(yield* Schema.decodeUnknownEffect(User)(encoded), user)
+}
+```
+
+`effect/unstable/arbitrary` is an unstable module, so pin your Effect version when you depend
+on it. See `v4-semantics.md`.

@@ -1,8 +1,6 @@
 # Error Patterns
 
-> **Effect v4.** `Schema.TaggedError` is unchanged, but HTTP status annotations moved to
-> `.pipe(HttpApiSchema.status(n))`, `Effect.catchAll` became `Effect.catch`, and `Cause` was
-> flattened. `catchTag` / `catchTags` are unchanged. They remain the backbone of this file.
+> **Effect v4.** `Schema.TaggedError` defines serializable errors with `_tag` discrimination. HTTP status is applied with `.pipe(HttpApiSchema.status(n))`. `Effect.catch`, `Effect.catchCause`, and `Effect.catchDefect` handle all errors, causes, and defects. `catchTag` and `catchTags` handle tagged errors. `Cause` holds a flat `reasons` array. These tools are the backbone of this file.
 
 ## Why Explicit Error Types?
 
@@ -11,7 +9,7 @@ Generic errors like `BadRequestError` or `NotFoundError` seem convenient but cre
 | Generic Error | Problems |
 |--------------|----------|
 | `NotFoundError` | Which resource? How should frontend recover? |
-| `BadRequestError` | What's invalid? Can user fix it? |
+| `BadRequestError` | What is invalid? Can user fix it? |
 | `UnauthorizedError` | Session expired? Wrong credentials? Missing permission? |
 | `InternalServerError` | Retryable? User action needed? |
 
@@ -72,7 +70,7 @@ AsyncResult.matchWithError(result, {
 })
 ```
 
-See `effect-atom-patterns.md`. v3's `Result.builder(...).onErrorTag(...)` was removed in v4.
+See `effect-atom-patterns.md` for frontend handling with `AsyncResult.match`.
 
 ## Error Naming Conventions
 
@@ -84,9 +82,7 @@ See `effect-atom-patterns.md`. v3's `Result.builder(...).onErrorTag(...)` was re
 | `{Integration}Error` | `WorkOSUserFetchError`, `StripePaymentError` | External service errors |
 | `Invalid{Field}Error` | `InvalidEmailError`, `InvalidPasswordError` | Validation failures |
 
-Note that v4 renamed the built-in `*Exception` classes to `*Error` (`NoSuchElementException` →
-`NoSuchElementError`, `TimeoutException` → `TimeoutError`, `UnknownException` → `UnknownError`),
-so this convention now matches the core library.
+The core library uses `*Error` classes (`NoSuchElementError`, `TimeoutError`, `UnknownError`), so this convention matches the core library.
 
 ### Rich Error Context
 
@@ -180,9 +176,7 @@ export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()(
 ).pipe(HttpApiSchema.status(403)) {}
 ```
 
-v3's third-argument form `HttpApiSchema.annotations({ status: 404 })` is gone. The direct
-annotation `Schema.TaggedError<E>()("E", { ... }, { httpApiStatus: 404 })` also works, but
-`.pipe(HttpApiSchema.status(...))` is the idiomatic form.
+Apply HTTP status with `.pipe(HttpApiSchema.status(...))`.
 
 ### Required Fields
 
@@ -196,16 +190,17 @@ Every error should have:
 **Never use `Effect.catch` or `mapError`** when you can use `catchTag`/`catchTags`. These
 preserve type information and enable precise error handling.
 
-`catchTag` and `catchTags` are unchanged in v4. The blanket catchers were renamed:
+`catchTag` and `catchTags` handle tagged errors. The full set of handlers is:
 
-| v3 | v4 |
+| Handler | Use For |
 | --- | --- |
-| `Effect.catchAll` | `Effect.catch` |
-| `Effect.catchAllCause` | `Effect.catchCause` |
-| `Effect.catchAllDefect` | `Effect.catchDefect` |
-| `Effect.catchSome` | `Effect.catchFilter` (uses `Filter`, not `Option`) |
-| `Effect.catchSomeCause` | `Effect.catchCauseFilter` |
-| `Effect.catchSomeDefect` | removed |
+| `Effect.catch` | All typed errors |
+| `Effect.catchCause` | Full cause |
+| `Effect.catchDefect` | Defects |
+| `Effect.catchFilter` | Filtered errors with `Filter` |
+| `Effect.catchCauseFilter` | Filtered causes |
+| `Effect.catchTag` | One tagged error |
+| `Effect.catchTags` | Multiple tagged errors |
 
 ### catchTag for Single Error Types
 
@@ -250,6 +245,8 @@ const processOrder = Effect.fn("OrderService.processOrder")(function* (input: Or
 
 ### Why Not Effect.catch?
 
+Blanket `Effect.catch` stays forbidden when a tagged handler applies.
+
 ```typescript
 // WRONG - Loses type information
 yield* effect.pipe(
@@ -265,7 +262,7 @@ yield* effect.pipe(
 // 4. Frontend can't show specific messages
 ```
 
-### New in v4: catchReason / catchReasons
+### catchReason / catchReasons
 
 When a tagged error carries a nested `reason`, `catchReason` handles one reason **without**
 removing the parent error from the error channel:
@@ -324,7 +321,7 @@ const findUser = Effect.fn("UserService.findUser")(function* (id: UserId) {
 
 ## Retryable Errors Pattern
 
-For errors that may be transient, add a `retryable` property. v4 expresses schema defaults with
+For errors that may be transient, add a `retryable` property. Express schema defaults with
 `withDecodingDefaultType`, whose default value is an **`Effect`**:
 
 ```typescript
@@ -363,8 +360,8 @@ export class ValidationError extends Schema.TaggedError<ValidationError>()(
 
 > See also: [Manual Retry/Timeout Logic] in `anti-patterns.md` for why manual retry loops are forbidden
 
-v4's `Effect.retry` takes an options object combining a schedule with `times` / `while` /
-`until`, which is clearer than composing schedules for the common case:
+`Effect.retry` takes an options object combining a schedule with `times` / `while` /
+`until`:
 
 ```typescript
 import { Effect, Schedule } from "effect"
@@ -384,14 +381,11 @@ const withRetry = <A, E extends { retryable?: boolean }, R>(
 yield* callExternalApi(request).pipe(withRetry)
 ```
 
-v3's `Schedule.whileInput` / `whileOutput` both collapsed into `Schedule.while`, and
-`Schedule.intersect` / `union` became `Schedule.max` / `Schedule.min`, but for "retry N times
-with backoff while X" the options object above is the direct route.
+`Schedule.while` continues while a predicate over `meta.input` and `meta.output` returns true. For "retry N times with backoff while X", the options object above is the direct route.
 
 ## Working with Cause
 
-v4 **flattened** `Cause`. It is no longer a recursive `Sequential`/`Parallel` tree. It's a
-wrapper around a flat array of reasons:
+`Cause` is a wrapper around a flat array of reasons:
 
 ```typescript
 interface Cause<E> {
@@ -401,11 +395,10 @@ interface Cause<E> {
 type Reason<E> = Fail<E> | Die | Interrupt
 ```
 
-`Empty`, `Sequential`, and `Parallel` are gone. An empty cause is an empty `reasons` array, and
-multiple failures are collected into one flat array.
+An empty cause is an empty `reasons` array, and multiple failures are collected into one flat array.
 
 ```typescript
-// Iterate reasons rather than recursing a tree
+// Iterate reasons in a flat loop
 const describe = (cause: Cause.Cause<AppError>) => {
     for (const reason of cause.reasons) {
         switch (reason._tag) {
@@ -419,25 +412,24 @@ const describe = (cause: Cause.Cause<AppError>) => {
 
 ### Extractors and Predicates
 
-| v3 | v4 |
+| API | Result |
 | --- | --- |
-| `Cause.failureOption(cause)` | `Cause.findErrorOption(cause)` |
-| `Cause.failureOrCause(cause)` | `Cause.findError(cause)`, returns `Result`, not `Either` |
-| `Cause.dieOption(cause)` | `Cause.findDefect(cause)` |
-| `Cause.failures(cause)` | `cause.reasons.filter(Cause.isFailReason)` |
-| `Cause.defects(cause)` | `cause.reasons.filter(Cause.isDieReason)` |
-| `Cause.isFailure(cause)` | `Cause.hasFails(cause)` |
-| `Cause.isDie(cause)` | `Cause.hasDies(cause)` |
-| `Cause.isInterrupted(cause)` | `Cause.hasInterrupts(cause)` |
-| `Cause.sequential(a, b)` / `parallel(a, b)` | `Cause.combine(a, b)` |
+| `Cause.findErrorOption(cause)` | First typed error as `Option` |
+| `Cause.findError(cause)` | First typed error as `Result` |
+| `Cause.findDefect(cause)` | First defect as `Result` |
+| `cause.reasons.filter(Cause.isFailReason)` | Typed error values as an array |
+| `cause.reasons.filter(Cause.isDieReason)` | Defect values as an array |
+| `Cause.hasFails(cause)` | True when a `Fail` reason is present |
+| `Cause.hasDies(cause)` | True when a `Die` reason is present |
+| `Cause.hasInterrupts(cause)` | True when an `Interrupt` reason is present |
+| `Cause.combine(a, b)` | Combined flat reasons |
 
 `findError` and `findDefect` return `Result`; use `findErrorOption` when you want an `Option`.
 See `testing-patterns.md` for asserting on tagged errors via `Exit` and `Cause`.
 
 ## Error Unions for Activities
 
-When defining workflow activities, use explicit error unions. Note `Schema.Union` takes one
-array in v4:
+When defining workflow activities, use explicit error unions. `Schema.Union` takes one array:
 
 ```typescript
 export class DatabaseError extends Schema.TaggedError<DatabaseError>()(
@@ -471,7 +463,7 @@ yield* Activity.make({
 })
 ```
 
-See `rpc-cluster-patterns.md`. `Activity` now lives in `effect/unstable/workflow`.
+See `rpc-cluster-patterns.md`. `Activity` lives in `effect/unstable/workflow`.
 
 ## HTTP Status Codes (Without Generic Errors)
 
@@ -521,7 +513,7 @@ Effect.catchTags({
 Generic errors are only acceptable for **truly unrecoverable internal errors** where:
 - The frontend can only show "Something went wrong"
 - No user action can fix it
-- You're hiding internal details for security
+- You hide internal details for security
 
 ```typescript
 // Acceptable for unrecoverable errors
@@ -530,18 +522,23 @@ export class InternalServerError extends Schema.TaggedError<InternalServerError>
     { message: Schema.String, requestId: Schema.optional(Schema.String) },
 ).pipe(HttpApiSchema.status(500)) {}
 
-// Use sparingly - only for truly unexpected errors
-Effect.catch((unexpectedError) =>
-    Effect.fail(new InternalServerError({
-        message: "An unexpected error occurred",
-        requestId: context.requestId,
-    }))
-)
+// Use sparingly, only for truly unexpected errors. Blanket `Effect.catch` stays forbidden,
+// so map known tags explicitly.
+Effect.catchTags({
+    DatabaseError: () =>
+        Effect.fail(new InternalServerError({
+            message: "An unexpected error occurred",
+            requestId: context.requestId,
+        })),
+    ConnectionError: () =>
+        Effect.fail(new InternalServerError({
+            message: "An unexpected error occurred",
+            requestId: context.requestId,
+        })),
+})
 ```
 
-A decode failure (`Schema.SchemaError`, v3's `ParseError`) inside a service is usually **your**
-bug rather than the caller's. Prefer `Effect.die` over mapping it to a domain error, so it
-surfaces as a defect instead of a handled failure.
+A decode failure is a `Schema.SchemaError`. Catch it with `catchTag("SchemaError", ...)` when recovery is possible. When a decode failure inside a service signals a programming bug, prefer `Effect.die` so it surfaces as a defect instead of a handled failure.
 
 ## Error Logging
 
@@ -560,3 +557,4 @@ const processWithLogging = Effect.fn("OrderService.process")(function* (orderId:
     )
 })
 ```
+

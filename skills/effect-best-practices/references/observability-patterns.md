@@ -1,12 +1,12 @@
 # Observability Patterns
 
-> **Effect v4.** `Effect.log*` and `Effect.fn` tracing are unchanged. `Metric` gained/renamed
-> several operations, `LogLevel` values are now plain string literals, and `Config` moved
-> validation into Schema checks.
+> **Effect v4.** `Effect.log` covers structured logging, `Effect.fn` covers tracing, `Metric`
+> covers counters and gauges, and `Config` covers typed configuration loading.
 
 ## Structured Logging with Effect.log
 
 **Always use Effect.log** instead of console.log. Effect.log provides:
+
 - Structured data
 - Log levels
 - Integration with telemetry systems
@@ -63,7 +63,7 @@ const processOrder = Effect.fn("OrderService.processOrder")(function* (input: Or
 // Creates span: "UserService.findById"
 const findById = Effect.fn("UserService.findById")(function* (id: UserId) {
     // Automatic span creation with:
-    // - Start/end timing
+    // - Start and end timing
     // - Error capture
     // - Parameter tracking (if annotated)
 })
@@ -77,11 +77,12 @@ const processPayment = Effect.fn("PaymentService.processPayment")(
 ```
 
 `Effect.fnUntraced` is the opt-out for hot paths, or for functions that only wrap an
-`Effect.gen` and don't warrant their own span.
+`Effect.gen` and do not warrant their own span.
 
 ### Naming Convention
 
 Use `ServiceName.methodName` format consistently:
+
 - `UserService.findById`
 - `OrderService.create`
 - `PaymentService.refund`
@@ -89,16 +90,16 @@ Use `ServiceName.methodName` format consistently:
 
 ## Span Annotations
 
-Add important context to spans, but don't overdo it:
+Add important context to spans, but do not overdo it:
 
 ```typescript
 const processOrder = Effect.fn("OrderService.process")(function* (orderId: OrderId) {
-    // GOOD - Important business identifiers
+    // GOOD, important business identifiers
     yield* Effect.annotateCurrentSpan("orderId", orderId)
     yield* Effect.annotateCurrentSpan("userId", order.userId)
     yield* Effect.annotateCurrentSpan("totalAmount", order.total)
 
-    // BAD - Too much detail, creates noise
+    // BAD, too much detail, creates noise
     // yield* Effect.annotateCurrentSpan("step", "validating")
     // yield* Effect.annotateCurrentSpan("itemCount", order.items.length)
     // yield* Effect.annotateCurrentSpan("item0Name", order.items[0].name)
@@ -108,11 +109,13 @@ const processOrder = Effect.fn("OrderService.process")(function* (orderId: Order
 ### What to Annotate
 
 **Do annotate:**
-- Entity IDs (orderId, userId, etc.)
+
+- Entity IDs (orderId, userId, and similar)
 - Important business values (amounts, statuses)
 - Error context when failing
 
-**Don't annotate:**
+**Do not annotate:**
+
 - Step-by-step progress
 - Individual item details
 - Internal implementation state
@@ -120,17 +123,19 @@ const processOrder = Effect.fn("OrderService.process")(function* (orderId: Order
 
 ## Metrics
 
-v4 consolidated the metric mutators. `Metric.increment` / `set` / `decrement` are gone:
+Metric operations in Effect v4:
 
-| v3 | v4 |
-| --- | --- |
-| `Metric.increment(counter)` | `Metric.update(counter, 1)` |
-| `Metric.set(gauge, v)` | `Metric.update(gauge, v)`, absolute value |
-| `Metric.decrement(gauge)` | `Metric.modify(gauge, -1)`, delta |
-| `Metric.tagged(k, v)` | `Metric.withAttributes(metric, { [k]: v })` |
-| `Metric.timerWithHistogram(h)` | `Metric.timer(name, options)` |
+| API | Purpose |
+| ----- | --------- |
+| `Metric.counter(name, opts?)` | Define a monotonically increasing counter |
+| `Metric.gauge(name, opts?)` | Define a gauge holding a current value |
+| `Metric.histogram(name, opts?)` | Define a histogram with explicit boundaries |
+| `Metric.timer(name, opts?)` | Define a duration histogram |
+| `Metric.update(metric, value)` | Add to a counter, or set a gauge to an absolute value |
+| `Metric.modify(metric, delta)` | Apply a delta to a gauge |
+| `Metric.withAttributes(metric, attrs)` | Attach attributes to a metric |
 
-`update` sets a gauge's absolute value; `modify` applies a delta. For counters, `update` adds.
+`update` sets a gauge absolute value. `modify` applies a delta. For counters, `update` adds.
 
 ### Counter
 
@@ -157,7 +162,7 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
 
 ### Counter with Attributes
 
-v3's tags are v4's **attributes**, applied to the metric rather than piped onto the update:
+Attributes are applied to the metric rather than piped onto the update:
 
 ```typescript
 const httpRequests = Metric.counter("http_requests_total", {
@@ -210,10 +215,8 @@ const handlerDuration = Metric.timer("handler_duration", {
 
 **Always use Config** instead of process.env.
 
-v4 renames: `Config.integer` → `Config.int`, `Config.literal(...)(name)` →
-`Config.literals([...], name)`, `Config.secret` → `Config.redacted`, and `Config.validate` →
-`Config.schema` with a Schema check. The error type is `Config.ConfigError` (the `ConfigError`
-module is gone).
+The error type is `Config.ConfigError`. Validation is expressed with Schema checks read through
+`Config.schema`.
 
 ### Basic Config
 
@@ -221,12 +224,12 @@ module is gone).
 import { Config, Effect, Layer } from "effect"
 
 const config = Config.all({
-    port: Config.int("PORT").pipe(Config.withDefault(3000)),
-    host: Config.string("HOST").pipe(Config.withDefault("localhost")),
-    env: Config.literals(["development", "staging", "production"], "NODE_ENV"),
+    port: Config.Int("PORT").pipe(Config.withDefault(3000)),
+    host: Config.String("HOST").pipe(Config.withDefault("localhost")),
+    env: Config.Literals(["development", "staging", "production"], "NODE_ENV"),
 })
 
-// Use in a layer. Layer.unwrapEffect became Layer.unwrap
+// Use in a layer
 const ServerLive = Layer.unwrap(
     Effect.gen(function* () {
         const { port, host, env } = yield* config
@@ -235,24 +238,24 @@ const ServerLive = Layer.unwrap(
 )
 ```
 
-`Config.port` is a built-in for the common case: it validates 1–65535 for you.
+`Config.Port` is a built-in for the common case: it validates 1 to 65535 for you.
 
 ### Config with Validation
 
-Validation moved into Schema. Attach checks to a schema and read it with `Config.schema`:
+Attach checks to a schema and read it with `Config.schema`:
 
 ```typescript
 import { Config, Schema } from "effect"
 
 const dbConfig = Config.all({
-    host: Config.string("DB_HOST"),
+    host: Config.String("DB_HOST"),
 
-    // Built-in: validates the 1..65535 range
-    port: Config.port("DB_PORT"),
+    // Built-in, validates the 1 to 65535 range
+    port: Config.Port("DB_PORT"),
 
-    database: Config.string("DB_NAME"),
+    database: Config.String("DB_NAME"),
 
-    // Custom range via a Schema check
+    // Custom range with a Schema check
     maxConnections: Config.schema(
         Schema.Int.check(Schema.isGreaterThan(0)),
         "DB_MAX_CONNECTIONS",
@@ -260,82 +263,78 @@ const dbConfig = Config.all({
 })
 ```
 
-The check's own annotations carry the failure message, as in
-`Schema.isGreaterThan(0, { description: "Max connections must be positive" })`. That replaces
-v3's `{ message, validation }` pair.
+The check annotations carry the failure message, as in
+`Schema.isGreaterThan(0, { description: "Max connections must be positive" })`.
 
 ### Redacted Config
 
 ```typescript
 import { Config, Effect, Redacted } from "effect"
 
-// For sensitive values that shouldn't be logged
+// For sensitive values that should not be logged
 const secretConfig = Config.all({
-    apiKey: Config.redacted("API_KEY"),           // Returns Redacted<string>
-    dbPassword: Config.redacted("DB_PASSWORD"),
+    apiKey: Config.Redacted("API_KEY"),           // Returns Redacted<string>
+    dbPassword: Config.Redacted("DB_PASSWORD"),
 })
 
 // Using redacted values
 const program = Effect.gen(function* () {
     const { apiKey, dbPassword } = yield* secretConfig
 
-    // Redacted values are wrapped - use Redacted.value to unwrap
+    // Redacted values are wrapped, use Redacted.value to unwrap
     const key = Redacted.value(apiKey)
 
     // Logging a Redacted shows "<redacted>"
-    yield* Effect.log("Config loaded", { apiKey }) // Safe - shows <redacted>
+    yield* Effect.log("Config loaded", { apiKey }) // Safe, shows <redacted>
 })
 ```
 
-v3's `Config.secret` was removed. `Config.redacted` already returns `Redacted<string>`. To
-redact an existing config value, use `Config.map(config, Redacted.make)`.
+`Config.Redacted` returns `Redacted<string>`. To redact an existing config value, use
+`Config.map(config, Redacted.make)`.
 
 ### Config with Nested Structure
 
 ```typescript
 const appConfig = Config.all({
     server: Config.all({
-        port: Config.int("SERVER_PORT"),
-        host: Config.string("SERVER_HOST"),
+        port: Config.Int("SERVER_PORT"),
+        host: Config.String("SERVER_HOST"),
     }),
     database: Config.all({
-        url: Config.string("DATABASE_URL"),
-        pool: Config.int("DATABASE_POOL_SIZE").pipe(Config.withDefault(10)),
+        url: Config.String("DATABASE_URL"),
+        pool: Config.Int("DATABASE_POOL_SIZE").pipe(Config.withDefault(10)),
     }),
     features: Config.all({
-        enableBeta: Config.boolean("ENABLE_BETA").pipe(Config.withDefault(false)),
-        maxUploadSize: Config.int("MAX_UPLOAD_SIZE").pipe(Config.withDefault(10485760)),
+        enableBeta: Config.Boolean("ENABLE_BETA").pipe(Config.withDefault(false)),
+        maxUploadSize: Config.Int("MAX_UPLOAD_SIZE").pipe(Config.withDefault(10485760)),
     }),
 })
 ```
 
-Use `Config.nested` to compose lookup path prefixes. Parsing no longer takes a public path
-prefix argument.
+Use `Config.nested` to compose lookup path prefixes.
 
 ## Log Level Configuration
 
-`LogLevel` values are **string literals** in v4, not branded objects: `"Fatal" | "Error" |
-"Warn" | "Info" | "Debug" | "Trace" | "All" | "None"`. Note `Warning` became `"Warn"`.
+`LogLevel` values are plain string literals: `"Fatal"`, `"Error"`, `"Warn"`, `"Info"`,
+`"Debug"`, `"Trace"`, `"All"`, `"None"`.
 
-The minimum level is a context reference, so it's set with a layer:
+The minimum level is a context reference, so it is set with a layer:
 
 ```typescript
 import { Config, Effect, Layer, References } from "effect"
 
-// v3: Logger.minimumLogLevel(level)
 const LogLevelLive = Layer.unwrap(
     Effect.gen(function* () {
-        const level = yield* Config.logLevel("LOG_LEVEL").pipe(Config.withDefault("Info"))
+        const level = yield* Config.LogLevel("LOG_LEVEL").pipe(Config.withDefault("Info"))
         return Layer.succeed(References.MinimumLogLevel, level)
     })
 )
 ```
 
-`Config.logLevel(name)` parses and validates the literal for you, with no manual lookup table.
+`Config.LogLevel(name)` parses and validates the literal for you, with no manual lookup table.
 
-For production JSON logging, `Logger.json` was replaced by `Logger.layer`, which **replaces**
-the active logger set. Include `Logger.tracerLogger` to keep v3's built-in behavior of emitting
-log events to the tracer:
+For production JSON logging, `Logger.layer` defines the active logger set. Include
+`Logger.tracerLogger` to emit log events to the tracer:
 
 ```typescript
 import { Logger } from "effect"
@@ -346,11 +345,11 @@ const JsonLoggerLive = Logger.layer([Logger.consoleJson, Logger.tracerLogger])
 const PrettyLoggerLive = Logger.layer([Logger.consolePretty(), Logger.tracerLogger])
 ```
 
-Omit `tracerLogger` only when you intentionally want trace log events disabled.
+Omit `tracerLogger` only when trace log events should stay disabled.
 
-Other v3 `FiberRef`-based knobs are now `References` too. `References.CurrentLogLevel`,
+Other configurable context values live in `References` as well. `References.CurrentLogLevel`,
 `References.CurrentLogAnnotations`, and `References.TracerEnabled` are all set with
-`Effect.provideService` or a `Layer.succeed`. See `v4-semantics.md`.
+`Effect.provideService` or a `Layer.succeed`.
 
 ## Combining Observability
 
@@ -396,5 +395,4 @@ const processOrder = Effect.fn("OrderService.process")(function* (input: OrderIn
 })
 ```
 
-`Clock.currentTimeMillis` is yieldable directly. `Effect.clockWith((c) => c.currentTimeMillis)`
-still works but is unnecessary here.
+`Clock.currentTimeMillis` is yieldable directly.

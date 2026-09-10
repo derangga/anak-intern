@@ -244,9 +244,8 @@ yield* Promise.resolve(42)
 yield* Effect.promise(() => Promise.resolve(42))
 ```
 
-In v4 this diagnostic also catches `yield* ref`, `yield* deferred`, and `yield* fiber`. Those
-types are no longer `Effect` subtypes. Use `Ref.get`, `Deferred.await`, and `Fiber.join`. See
-`v4-semantics.md`.
+This diagnostic catches `yield* ref`, `yield* deferred`, and `yield* fiber`. Those
+types are not `Effect` subtypes. Use `Ref.get`, `Deferred.await`, and `Fiber.join`.
 
 ### Forbidden Tags
 

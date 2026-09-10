@@ -1,8 +1,8 @@
 # Resource Patterns
 
-> **Effect v4.** `Layer.scoped` was merged into `Layer.effect`, `Runtime<R>` was removed, and
-> `ManagedRuntime` is no longer an `Effect`. `Effect.acquireRelease` and `Effect.scoped` keep
-> their v3 behavior.
+> **Effect v4.** `Layer.effect` handles scoped and unscoped construction. `ManagedRuntime` is a
+> handle with run methods and a dispose method, not an `Effect`. `Effect.acquireRelease` and
+> `Effect.scoped` manage resource lifetimes.
 
 ## Effect.acquireRelease
 
@@ -27,10 +27,17 @@ const managedConnection = Effect.acquireRelease(
 )
 ```
 
-v3's `Effect.acquireReleaseInterruptible` is now an option: `Effect.acquireRelease(acquire,
-release, { interruptible: true })`.
+Pass `{ interruptible: true }` as a third argument for interruptible acquisition:
 
-> See also: [Manual try/finally for Resource Cleanup] in `anti-patterns.md` for why `try/finally` doesn't work in Effect generators
+```typescript
+const managedConnectionInterruptible = Effect.acquireRelease(
+    connectToDatabase(),
+    (conn) => conn.close().pipe(Effect.orDie),
+    { interruptible: true },
+)
+```
+
+> See also: [Manual try/finally for Resource Cleanup] in `anti-patterns.md` for why `try/finally` does not work in Effect generators
 
 ### Using the Resource
 
@@ -91,8 +98,8 @@ const program = Effect.scoped(
 
 ### Providing a Scope Without Closing It
 
-v3's `Scope.extend` is `Scope.provide` in v4. It satisfies an effect's `Scope` requirement
-without closing the scope when the effect completes:
+`Scope.provide` satisfies an effect `Scope` requirement without closing the scope when the
+effect completes:
 
 ```typescript
 import { Effect, Scope } from "effect"
@@ -100,7 +107,7 @@ import { Effect, Scope } from "effect"
 const program = Effect.gen(function* () {
     const scope = yield* Scope.make()
     yield* myScopedEffect.pipe(Scope.provide(scope))
-    // scope still open, close it explicitly when you're done
+    // scope still open, close it explicitly when done
 })
 ```
 
@@ -174,7 +181,7 @@ const program = Effect.scoped(
         yield* doWork(db, cache)
 
         yield* Effect.log("=== Releasing ===")
-        // Release order: cache → db → config (reverse of acquisition)
+        // Release order: cache, then db, then config (reverse of acquisition)
         // This is correct because cache may depend on db, db on config
     }),
 )
@@ -229,7 +236,7 @@ const program = Effect.gen(function* () {
 })
 ```
 
-`Pool.get(pool)` is a module function in v4. There is no `pool.get` property.
+`Pool.get(pool)` is a module function. Call it with the pool as the argument.
 
 ### Pool Configuration
 
@@ -241,13 +248,13 @@ const pool = yield* Pool.makeWithTTL({
     min: 2,                           // Keep at least this many
     max: 10,                          // Grow up to this many
     timeToLive: Duration.minutes(5),  // Shrink unused excess after TTL
-    timeToLiveStrategy: "usage",      // TTL from last use (vs "creation")
+    timeToLiveStrategy: "usage",      // TTL from last use (versus creation)
 })
 ```
 
 Both constructors require a `Scope`. The pool is torn down when the enclosing scope closes.
 
-### Pool vs Manual Management
+### Pool versus Manual Management
 
 | Approach | Use Case |
 |----------|----------|
@@ -259,9 +266,8 @@ Both constructors require a `Scope`. The pool is torn down when the enclosing sc
 
 ### Layer.effect Absorbs the Scope
 
-**v4 removed `Layer.scoped`**. Scoped acquisition merged into `Layer.effect`, which supplies
-the layer's `Scope` and excludes it from the layer's requirements. Put the `acquireRelease`
-inside the service's `make`:
+`Layer.effect` supplies the layer `Scope` and excludes it from the layer requirements. Put the
+`acquireRelease` inside the service `make`:
 
 ```typescript
 import { Context, Effect, Layer } from "effect"
@@ -287,13 +293,13 @@ export class DatabasePool extends Context.Service<DatabasePool>()("DatabasePool"
         }
     }),
 }) {
-    // Layer.effect handles the Scope, no Layer.scoped needed
+    // Layer.effect handles the Scope
     static readonly layer = Layer.effect(this, this.make)
 }
 ```
 
-v3's `Effect.Service` had a `scoped:` constructor option alongside `effect:`. v4's
-`Context.Service` has only `make`, and `Layer.effect` decides scoping.
+`Context.Service` defines the service with a `make` effect. `Layer.effect` builds the layer
+from that effect, with scope handling included.
 
 ### Composing Scoped Layers
 
@@ -306,19 +312,18 @@ const InfraLive = Layer.mergeAll(
     MessageQueue.layer,    // Acquired 3rd
 )
 
-// On shutdown: MessageQueue → RedisCache → DatabasePool
+// On shutdown: MessageQueue, then RedisCache, then DatabasePool
 ```
 
-Because v4 memoizes layers across `Effect.provide` calls, a scoped layer used in two places is
-built once, and torn down once. Use `Layer.fresh` or `Effect.provide(layer, { local: true })`
-when you deliberately need independent resources. See `layer-patterns.md`.
+Layers memoize across `Effect.provide` calls, so a scoped layer used in two places is built
+once, and torn down once. Use `Layer.fresh` or `Effect.provide(layer, { local: true })` when
+independent resources are needed deliberately. See `layer-patterns.md`.
 
 > See also: `layer-patterns.md` for `Layer.mergeAll`, `Layer.provideMerge`, and dependency wiring
 
 ## Resource Timeouts
 
-v4 renamed `Effect.timeoutFail` to `Effect.timeoutOrElse`, and the fallback is an **Effect**, so
-wrap the error in `Effect.fail`.
+`Effect.timeoutOrElse` takes a fallback `Effect`, so wrap the error in `Effect.fail`.
 
 ### Acquisition Timeout
 
@@ -382,10 +387,10 @@ const program = Effect.scoped(
 // Resource is still properly released even on timeout
 ```
 
-Plain `Effect.timeout(duration)` fails with the built-in `TimeoutError` (v3:
-`TimeoutException`) when you don't need a custom error.
+Plain `Effect.timeout(duration)` fails with the built-in `TimeoutError` when a custom error is
+not needed.
 
-## ManagedRuntime vs Effect.provide
+## ManagedRuntime versus Effect.provide
 
 ### Effect.provide (Default)
 
@@ -400,7 +405,7 @@ const result = await Effect.runPromise(
 
 ### ManagedRuntime (Long-Lived)
 
-**Use `ManagedRuntime`** for servers and long-running processes where you want layers to persist across multiple effect executions:
+**Use `ManagedRuntime`** for servers and long-running processes where layers persist across multiple effect executions:
 
 ```typescript
 import { ManagedRuntime } from "effect"
@@ -423,32 +428,30 @@ server.post("/users", async (req, res) => {
 process.on("SIGTERM", () => runtime.dispose())
 ```
 
-**v4 changes to `ManagedRuntime`:**
+Facts about `ManagedRuntime` in Effect v4:
 
-- It is **no longer an `Effect`**, so you cannot `yield*` the runtime itself. Call its run methods,
-  or use `contextEffect` when you need the built context inside an Effect.
-- `runtime.runtimeEffect` / `runtime.runtime` were renamed to `contextEffect` / `context`.
+- It is a handle, not an `Effect`, so call its run methods directly. Use `contextEffect` when
+  the built context is needed inside an Effect.
+- `runtime.contextEffect` and `runtime.context` expose the built context.
 - `ManagedRuntime.make(layer, { memoMap })` accepts a shared memo map.
-- `ManagedRuntime.ManagedRuntime.Context<T>` is now `ManagedRuntime.ManagedRuntime.Services<T>`.
+- `ManagedRuntime.ManagedRuntime.Services<T>` extracts the service type.
 
 Available methods: `runPromise`, `runPromiseExit`, `runFork`, `runSync`, `context`,
 `contextEffect`, `dispose`.
 
-### Runtime<R> Was Removed
+### Provide a Prebuilt Context
 
-v3's `Runtime<R>` (bundling `Context`, `RuntimeFlags`, and `FiberRefs`) no longer exists. Use
-`Context<R>` and the `*With` run functions:
+Use `Context` with the `run*With` functions to run an effect against services captured
+elsewhere:
 
 ```typescript
-// v3: Runtime.runFork(runtime)(program)
-// v4:
 const main = Effect.gen(function* () {
     const services = yield* Effect.context<Logger>()
     return Effect.runForkWith(services)(program)
 })
 ```
 
-The `Runtime` module now contains only `Teardown`, `defaultTeardown`, and `makeRunMain`.
+The `Runtime` module contains `Teardown`, `defaultTeardown`, and `makeRunMain`.
 
 ### When to Use Each
 
@@ -465,16 +468,16 @@ The `Runtime` module now contains only `Teardown`, `defaultTeardown`, and `makeR
 | `Effect.acquireRelease(acquire, release, opts?)` | `Effect` | Bracket pattern, guaranteed cleanup |
 | `Effect.scoped` | `Effect` | Create scope for resource lifetime |
 | `Effect.addFinalizer(fn)` | `Effect` | Register cleanup in current scope |
-| `Scope.provide(scope)` | `Scope` | Provide a scope without closing it (v3: `Scope.extend`) |
+| `Scope.provide(scope)` | `Scope` | Provide a scope without closing it |
 | `Pool.make({ acquire, size })` | `Pool` | Fixed-size reusable resource pool |
 | `Pool.makeWithTTL({ acquire, min, max, timeToLive })` | `Pool` | Elastic pool with TTL |
 | `Pool.get(pool)` | `Pool` | Borrow resource from pool (auto-returned) |
-| `Layer.effect` | `Layer` | Build layer, scoped or not (v3: `Layer.scoped`) |
+| `Layer.effect` | `Layer` | Build layer, scoped or not |
 | `Layer.fresh(layer)` | `Layer` | Bypass shared memoization |
 | `ManagedRuntime.make(layer, opts?)` | `ManagedRuntime` | Long-lived runtime sharing layers |
 | `runtime.runPromise(effect)` | n/a | Run effect in managed runtime |
-| `runtime.contextEffect` | n/a | Built context as an Effect (v3: `runtimeEffect`) |
+| `runtime.contextEffect` | n/a | Built context as an Effect |
 | `runtime.dispose()` | n/a | Tear down runtime and run finalizers |
-| `Effect.timeoutOrElse({ duration, onTimeout })` | `Effect` | Timeout with a fallback Effect (v3: `timeoutFail`) |
-| `Effect.runForkWith(services)` | `Effect` | Run with a prebuilt `Context` (v3: `Runtime.runFork`) |
-| `NodeRuntime.runMain(effect)` | `@effect/platform-node` | Entry point with SIGINT/SIGTERM handling |
+| `Effect.timeoutOrElse({ duration, onTimeout })` | `Effect` | Timeout with a fallback Effect |
+| `Effect.runForkWith(services)` | `Effect` | Run with a prebuilt `Context` |
+| `NodeRuntime.runMain(effect)` | `@effect/platform-node` | Entry point with SIGINT and SIGTERM handling |

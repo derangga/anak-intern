@@ -1,10 +1,6 @@
 # Schema Patterns
 
-> **Effect v4.** Schema was substantially reworked. The biggest shift: v3's standalone
-> refinement schemas and `.pipe(...)` filters became **checks** applied with `.check(...)`, and
-> `transform` / `transformOrFail` were replaced by `decodeTo` with a `SchemaTransformation` or
-> `SchemaGetter`. `Schema.brand`, `Schema.Struct`, `Schema.Class`, and `Schema.TaggedError`
-> keep their v3 shape.
+> **Effect v4 (4.0.0-rc.113).** Schema defines codecs with Type and Encoded forms. Refinements are checks applied with `.check(...)`. Transformations are defined with `decodeTo` and `SchemaTransformation` or `SchemaGetter`. Failures are expressed with `SchemaIssue` and reported as `Schema.SchemaError`. `Schema.brand`, `Schema.Struct`, `Schema.Class`, and `Schema.TaggedError` define nominal types, structs, classes, and errors.
 
 ## Branded Types for IDs
 
@@ -13,7 +9,7 @@
 ```typescript
 import { Schema } from "effect"
 
-// Entity IDs - always branded with namespace
+// Entity IDs, always branded with namespace
 export const UserId = Schema.String.check(Schema.isUUID()).pipe(Schema.brand("@App/UserId"))
 export type UserId = Schema.Schema.Type<typeof UserId>
 
@@ -29,13 +25,14 @@ export const ProductId = Schema.String.check(Schema.isUUID()).pipe(Schema.brand(
 export type ProductId = Schema.Schema.Type<typeof ProductId>
 ```
 
-v3's `Schema.UUID` no longer exists as a standalone schema. It's a check on `Schema.String`.
-`Schema.isUUID(version?)` optionally pins a UUID version. `Schema.ULID` became
-`Schema.isULID()` the same way.
+`Schema.String.check(Schema.isUUID())` validates UUID strings. `Schema.isUUID(version?)`
+accepts an optional UUID version pin. `Schema.String.check(Schema.isULID())` validates ULID
+strings the same way.
 
 ### Branding Convention
 
 Use `@Namespace/EntityName` format:
+
 - `@App/UserId` - Main application entities
 - `@Billing/InvoiceId` - Billing domain entities
 - `@External/StripeCustomerId` - External system IDs
@@ -49,48 +46,43 @@ const userId = Schema.decodeSync(UserId)("123e4567-e89b-12d3-a456-426614174000")
 // Generate new ID
 const newUserId = UserId.make(crypto.randomUUID())
 
-// Type error - can't mix ID types
+// Type error, IDs do not mix
 const order = yield* orderService.findById(userId) // Error: UserId is not OrderId
 ```
 
 ### When NOT to Brand
 
-Don't brand simple strings that don't need type safety:
+Don't brand simple strings that need no type safety:
 
 ```typescript
-// NOT branded - acceptable
+// NOT branded, acceptable
 export const Url = Schema.String
 export const FilePath = Schema.String
 export const EmailAddress = Schema.String.check(Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
 
-// These don't need branding because:
-// 1. They don't cross service boundaries in ways that could be confused
-// 2. They're typically validated by format, not by type
+// These need no branding because:
+// 1. They do not cross service boundaries in ways that could be confused
+// 2. They are validated by format, not by type
 ```
 
-## Checks Replace Filters
+## Checks
 
-v3 applied refinements by piping filter schemas. v4 applies **checks** with `.check(...)`, which
-accepts several checks at once:
+Apply refinements as checks with `.check(...)`, which accepts several checks at once:
 
-| v3 | v4 |
+| Check | Constraint |
 | --- | --- |
-| `Schema.pattern(re)` | `Schema.isPattern(re)` |
-| `Schema.minLength(n)` / `maxLength(n)` | `Schema.isMinLength(n)` / `isMaxLength(n)` |
-| `Schema.length(n)` | `Schema.isLengthBetween(n, n)` |
-| `Schema.nonEmptyString` | `Schema.isNonEmpty` |
-| `Schema.int()` | `Schema.isInt()` |
-| `Schema.positive()` | `Schema.isGreaterThan(0)` |
-| `Schema.between(min, max)` | `Schema.isBetween({ minimum, maximum })` |
-| `Schema.greaterThan(n)` | `Schema.isGreaterThan(n)` |
-| `Schema.filter(predicate)` | `Schema.check(Schema.makeFilter(predicate))` |
-| `Schema.filter(refinement)` | `Schema.refine(refinement)` |
+| `Schema.isPattern(re)` | String matches `re` |
+| `Schema.isMinLength(n)`, `Schema.isMaxLength(n)` | String length bounds |
+| `Schema.isLengthBetween(min, max)` | String or collection size range, exact length with equal bounds |
+| `Schema.isNonEmpty()` | Non empty string or collection |
+| `Schema.isInt()` | Integer numbers |
+| `Schema.isGreaterThan(n)` | Numbers above `n`, positive numbers with `Schema.isGreaterThan(0)` |
+| `Schema.isBetween({ minimum, maximum })` | Numbers within inclusive bounds |
+| `Schema.check(Schema.makeFilter(predicate))` | Custom predicate |
+| `Schema.refine(refinement)` | Custom type refinement |
 
 ```typescript
-// v3
-Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100))
-
-// v4: one .check call, multiple checks
+// One .check call, multiple checks
 Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))
 ```
 
@@ -99,7 +91,7 @@ Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))
 **Prefer Schema.Struct** over TypeScript interfaces for domain types:
 
 ```typescript
-// CORRECT - Schema.Struct
+// CORRECT, Schema.Struct
 export const User = Schema.Struct({
     id: UserId,
     email: Schema.String,
@@ -111,14 +103,13 @@ export const User = Schema.Struct({
 })
 export type User = Schema.Schema.Type<typeof User>
 
-// Can derive encoded type for database/API
+// Derive encoded type for database and API
 export type UserEncoded = Schema.Schema.Encoded<typeof User>
 ```
 
-Two v4 renames above: `Schema.Literal("a", "b", "c")` became `Schema.Literals(["a", "b", "c"])`
-(one array argument; `Schema.Literal` now takes exactly one value, and `Schema.Null` replaces
-`Schema.Literal(null)`), and `Schema.DateTimeUtc` became `Schema.DateTimeUtcFromString`.
-v4's `DateTimeUtc` is the self schema, not the string codec.
+`Schema.Literals` takes one array argument. `Schema.Literal` takes exactly one value.
+`Schema.Null` covers null. `Schema.DateTimeUtcFromString` decodes ISO date strings.
+`Schema.DateTimeUtc` is the self schema for `DateTime` values.
 
 ### Input Types for Mutations
 
@@ -134,7 +125,7 @@ export const CreateUserInput = Schema.Struct({
 
     organizationId: OrganizationId,
 
-    // v3's optionalWith({ default }), the default is an Effect in v4
+    // Absent role decodes to "member", the default is an Effect
     role: Schema.Literals(["admin", "member", "viewer"]).pipe(
         Schema.withDecodingDefaultType(Effect.succeed("member" as const)),
     ),
@@ -148,10 +139,9 @@ export const UpdateUserInput = Schema.Struct({
 export type UpdateUserInput = Schema.Schema.Type<typeof UpdateUserInput>
 ```
 
-## Transforms: decodeTo Replaces transform
+## Transforms with decodeTo
 
-`Schema.transform` and `Schema.transformOrFail` are gone. Pipe the source schema through
-`Schema.decodeTo(target, transformation)`.
+Pipe the source schema through `Schema.decodeTo(target, transformation)`.
 
 ### Total Transforms
 
@@ -183,8 +173,8 @@ export const DollarsFromCents = Schema.Number.check(Schema.isInt()).pipe(
 
 ### Fallible Transforms
 
-v3's `ParseResult.fail(new ParseResult.Type(...))` became `Effect.fail(new SchemaIssue.*)` inside
-a `SchemaGetter`:
+Inside a `SchemaGetter`, signal success with `Effect.succeed` and failure with
+`Effect.fail(new SchemaIssue.*)`:
 
 ```typescript
 import { Effect, Schema, SchemaGetter, SchemaIssue } from "effect"
@@ -201,27 +191,27 @@ export const PositiveNumber = Schema.Number.pipe(
 )
 ```
 
-v4 mappings: `ParseResult.succeed` → `Effect.succeed`, `ParseResult.fail` → `Effect.fail`,
-`ParseResult.Type` → `SchemaIssue.InvalidType`.
+`Effect.succeed` signals success. `Effect.fail` signals failure.
+`SchemaIssue.InvalidType` reports type mismatches.
 
-Note that a simple predicate is usually better expressed as a **check** than a fallible
-transform: `Schema.Number.check(Schema.isGreaterThan(0)).pipe(Schema.brand("PositiveNumber"))`.
+A simple predicate fits a **check** better than a fallible transform:
+`Schema.Number.check(Schema.isGreaterThan(0)).pipe(Schema.brand("PositiveNumber"))`.
 
 ### JSON Strings
 
-v4 ships this, so don't hand-roll it:
+For JSON strings, define:
 
 ```typescript
-// v3: Schema.parseJson(schema)
+// JSON string to Config
 export const ConfigFromJson = Schema.fromJsonString(Config)
 
-// Untyped JSON: v3's Schema.parseJson()
+// Untyped JSON string
 export const AnyJson = Schema.UnknownFromJsonString
 ```
 
 ## Schema.Class for Entities with Methods
 
-Use `Schema.Class` when entities need methods (unchanged in v4):
+Use `Schema.Class` when entities need methods:
 
 ```typescript
 export class User extends Schema.Class<User>("User")({
@@ -260,7 +250,7 @@ console.log(user.isAdmin) // false
 
 ## Annotations
 
-`Schema.annotations(...)` became the `.annotate(...)` method:
+Add documentation and examples with `.annotate(...)`:
 
 ```typescript
 export const CreateOrderInput = Schema.Struct({
@@ -289,15 +279,16 @@ Checks take their own annotations as a trailing argument, as in
 
 ## Optional Fields
 
-v4 splits v3's `optional` / `optionalWith` options into distinct combinators:
+Struct fields combine distinct combinators for absent keys, `undefined` values, defaults,
+and nulls:
 
-| v3 | v4 |
+| Combinator | Meaning |
 | --- | --- |
-| `optional(s)` | `optional(s)`, key may be absent **or** `undefined` |
-| `optional(s, { exact: true })` | `optionalKey(s)`, key may be absent, never `undefined` |
-| `optionalWith(s, { default })` | `s.pipe(withDecodingDefaultType(Effect.succeed(v)))` |
-| `optionalWith(s, { exact: true, default })` | `s.pipe(withDecodingDefaultTypeKey(Effect.succeed(v)))` |
-| `optionalWith(s, { nullable: true })` | `optional(NullOr(s))` + `decodeTo` filtering nulls |
+| `Schema.optional(s)` | Key may be absent or `undefined` |
+| `Schema.optionalKey(s)` | Key may be absent, never explicitly `undefined` |
+| `s.pipe(Schema.withDecodingDefaultType(Effect.succeed(v)))` | Absent key decodes to `v`, with `v` as a Type value |
+| `s.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(v)))` | Key level default, absent key decodes to `v` |
+| `Schema.optional(Schema.NullOr(s))` plus `decodeTo` filtering nulls | Nullable input decoded to an optional field |
 
 ```typescript
 import { Effect, Schema } from "effect"
@@ -323,7 +314,7 @@ than `Type` terms.
 
 ## Union Types and Discriminated Unions
 
-`Schema.Union` takes one array in v4:
+`Schema.Union` takes one array:
 
 ```typescript
 // Simple union, prefer Literals for a set of literals
@@ -364,7 +355,7 @@ const processPayment = (details: PaymentDetails) => {
 ```
 
 `Schema.TaggedStruct(tag, fields)` is the shorthand for a `_tag`-discriminated struct.
-`Schema.Tuple` likewise takes one array: `Schema.Tuple([A, B])`.
+`Schema.Tuple` takes one array: `Schema.Tuple([A, B])`.
 
 ## Enums and Literals
 
@@ -373,7 +364,7 @@ const processPayment = (details: PaymentDetails) => {
 export const UserRole = Schema.Literals(["admin", "member", "viewer"])
 export type UserRole = Schema.Schema.Type<typeof UserRole>
 
-// Use Enum (v3: Enums) for larger sets or when you need runtime values
+// Use Enum for larger sets or when runtime values help
 export const OrderStatus = Schema.Enum({
     Pending: "pending",
     Processing: "processing",
@@ -402,44 +393,45 @@ export const Category = Schema.Struct({
 
 ## Decoding and Encoding
 
-The effectful codecs gained an `Effect` suffix, and the `Either` variants became `Exit`:
+Effectful codecs end with `Effect`. `Exit` variants return `Exit`. Sync codecs throw
+`SchemaError` on failure:
 
-| v3 | v4 |
+| Function | Result |
 | --- | --- |
-| `Schema.decodeUnknown(s)` | `Schema.decodeUnknownEffect(s)` |
-| `Schema.decode(s)` | `Schema.decodeEffect(s)` |
-| `Schema.decodeUnknownEither(s)` | `Schema.decodeUnknownExit(s)` |
-| `Schema.encode(s)` | `Schema.encodeEffect(s)` |
-| `Schema.encodeUnknownEither(s)` | `Schema.encodeUnknownExit(s)` |
-| `Schema.decodeUnknownSync(s)` | unchanged |
-| `Schema.decodeSync(s)` | unchanged |
+| `Schema.decodeUnknownEffect(s)` | Effect decoding `unknown` input, fails with `SchemaError` |
+| `Schema.decodeEffect(s)` | Effect decoding Type input, fails with `SchemaError` |
+| `Schema.decodeUnknownExit(s)` | `Exit` decoding `unknown` input |
+| `Schema.encodeEffect(s)` | Effect encoding to Encoded form, fails with `SchemaError` |
+| `Schema.encodeUnknownExit(s)` | `Exit` encoding `unknown` input |
+| `Schema.decodeUnknownSync(s)` | Sync decoding of `unknown` input |
+| `Schema.decodeSync(s)` | Sync decoding of Type input |
 
 ```typescript
-// Decode (parse) - use in services
+// Decode (parse), use in services
 const parseUser = Schema.decodeUnknownEffect(User)
 const result = yield* parseUser(rawData) // Effect<User, SchemaError>
 
-// Decode sync - only in controlled contexts
+// Decode sync, only in controlled contexts
 const user = Schema.decodeUnknownSync(User)(rawData)
 
-// Encode - for serialization
+// Encode, for serialization
 const encodeUser = Schema.encodeEffect(User)
 const encoded = yield* encodeUser(user) // Effect<UserEncoded, SchemaError>
 ```
 
-The failure type is `Schema.SchemaError` (v3's `ParseError`), so a decode failure is caught with
-`Effect.catchTag("SchemaError", ...)`. Inside a service, a decode failure is usually **your**
+The failure type is `Schema.SchemaError`, so a decode failure is caught with
+`Effect.catchTag("SchemaError", ...)`. Inside a service, a decode failure is often **your**
 bug, not the caller's, so `Effect.die` it rather than surfacing it. See `error-patterns.md`.
 
 ## Structural Field Operations
 
-v3's struct combinators moved onto `mapFields`:
+Derive structs with `mapFields`:
 
-| v3 | v4 |
+| Goal | Pattern |
 | --- | --- |
-| `schema.pipe(Schema.pick("a"))` | `schema.mapFields(Struct.pick(["a"]))` |
-| `schema.pipe(Schema.omit("a"))` | `schema.mapFields(Struct.omit(["a"]))` |
-| `Schema.partial(schema)` | `schema.mapFields(Struct.map(Schema.optional))` |
-| `Schema.required(schema)` | `schema.mapFields(Struct.map(Schema.requiredKey))` |
-| `schema.pipe(Schema.extend(other))` | `schema.mapFields(Struct.assign(otherFields))` |
-| `Schema.Record({ key, value })` | `Schema.Record(key, value)` |
+| Pick keys | `schema.mapFields(Struct.pick(["a"]))` |
+| Omit keys | `schema.mapFields(Struct.omit(["a"]))` |
+| All fields optional | `schema.mapFields(Struct.map(Schema.optional))` |
+| All fields required | `schema.mapFields(Struct.map(Schema.requiredKey))` |
+| Add fields | `schema.mapFields(Struct.assign(otherFields))` |
+| Dictionary | `Schema.Record(key, value)` with separate key and value arguments |
