@@ -31,7 +31,7 @@ A `Fiber` is a handle, not an `Effect`. Join it with `Fiber.join` to get its res
 ### Fork Variants
 
 | Variant | Lifetime | Use Case |
-|---------|----------|----------|
+| --------- | ---------- | ---------- |
 | `Effect.forkChild` | Parent fiber | Default, interrupted when the parent ends |
 | `Effect.forkDetach` | Application lifetime | Long-running background tasks (health checks, watchers) |
 | `Effect.forkScoped` | Enclosing `Scope` | Fiber interrupted when scope closes |
@@ -143,7 +143,7 @@ Queues provide point-to-point communication between fibers with backpressure.
 ### Queue Variants
 
 | Variant | Behavior When Full |
-|---------|-------------------|
+| --------- | ------------------- |
 | `Queue.bounded(n)` | Suspends producer until space available (backpressure) |
 | `Queue.unbounded()` | Never blocks, grows without limit |
 | `Queue.sliding(n)` | Drops oldest items when full |
@@ -152,10 +152,11 @@ Queues provide point-to-point communication between fibers with backpressure.
 ### Producer/Consumer Pattern
 
 ```typescript
-import { Effect, Fiber, Queue } from "effect"
+import { Cause, Effect, Fiber, Queue } from "effect"
 
 const program = Effect.gen(function* () {
-    const queue = yield* Queue.bounded<Job>(100)
+    // Cause.Done in the error type is what makes Queue.end available later
+    const queue = yield* Queue.bounded<Job, Cause.Done>(100)
 
     // Producer fiber
     const producer = yield* Effect.forkChild(
@@ -215,7 +216,8 @@ yield* Queue.shutdown(queue)
 
 Call `Queue.poll` repeatedly up to the limit when a bounded non-blocking take is needed, or
 `Queue.clear` when draining everything is acceptable. `Queue.end` signals graceful completion
-through the `Cause.Done` signal.
+through the `Cause.Done` signal, and its parameter is `Enqueue<A, E | Done>`, so the queue has to
+declare `Done` up front: `Queue.bounded<Job, Cause.Done>(100)`, not `Queue.bounded<Job>(100)`.
 
 ## PubSub
 
@@ -247,7 +249,7 @@ const program = Effect.gen(function* () {
 ### PubSub Variants
 
 | Variant | Behavior When Full |
-|---------|-------------------|
+| --------- | ------------------- |
 | `PubSub.bounded(n)` | Suspends publisher until subscribers catch up |
 | `PubSub.unbounded()` | Never blocks publisher |
 | `PubSub.sliding(n)` | Drops oldest messages per subscriber |
@@ -449,7 +451,7 @@ const result = yield* longOperation.pipe(
 const result = yield* longOperation.pipe(
     Effect.timeoutOrElse({
         duration: Duration.seconds(5),
-        onTimeout: () => Effect.fail(new OperationTimedOut({ message: "Operation timed out" })),
+        orElse: () => Effect.fail(new OperationTimedOut({ message: "Operation timed out" })),
     }),
 )
 ```
@@ -530,11 +532,12 @@ const pollWithBackoff = Effect.repeat(
     ]),
 )
 
-// Poll until condition met
+// Poll until condition met. The effect value is meta.input,
+// meta.output here is the schedule's own delay
 const waitForReady = Effect.repeat(
     checkStatus,
     Schedule.spaced(Duration.seconds(1)).pipe(
-        Schedule.while((meta) => meta.output !== "ready"),
+        Schedule.while((meta) => meta.input !== "ready"),
     ),
 )
 
@@ -570,7 +573,7 @@ const repeatWhileOutput = Effect.repeat(
 ### Schedule Comparison
 
 | Schedule | Behavior |
-|----------|----------|
+| ---------- | ---------- |
 | `Schedule.spaced(d)` | Wait `d` between end of one execution and start of next |
 | `Schedule.fixed(d)` | Run at fixed intervals (accounts for execution time) |
 | `Schedule.exponential(d)` | Double the delay each time: `d`, `2d`, `4d`, `8d`... |
@@ -582,7 +585,7 @@ const repeatWhileOutput = Effect.repeat(
 ## Quick Reference Table
 
 | Primitive | Import | Create | Use Case |
-|-----------|--------|--------|----------|
+| ----------- | -------- | -------- | ---------- |
 | `Effect.forkChild` | `Effect` | `Effect.forkChild(effect, opts?)` | Background task tied to parent |
 | `Effect.forkDetach` | `Effect` | `Effect.forkDetach(effect, opts?)` | App-lifetime background task |
 | `Effect.forkScoped` | `Effect` | `Effect.forkScoped(effect, opts?)` | Scope-lifetime background task |
@@ -602,5 +605,5 @@ const repeatWhileOutput = Effect.repeat(
 | `Ref.make` | `Ref` | `Ref.make(initial)` | Atomic shared state |
 | `Effect.race` | `Effect` | `Effect.race(a, b)` | First to complete wins |
 | `Effect.timeout` | `Effect` | `Effect.timeout(d)` | Fail with `TimeoutError` |
-| `Effect.timeoutOrElse` | `Effect` | `Effect.timeoutOrElse({ duration, onTimeout })` | Timeout with fallback Effect |
+| `Effect.timeoutOrElse` | `Effect` | `Effect.timeoutOrElse({ duration, orElse })` | Timeout with fallback Effect |
 | `Effect.repeat` | `Effect` | `Effect.repeat(effect, schedule)` | Polling, repeated execution |

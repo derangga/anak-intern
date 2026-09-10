@@ -87,7 +87,7 @@ consumed once per run. Running it again re-executes the whole pipeline from the
 source.
 
 | Function | Returns | Notes |
-|----------|---------|-------|
+| ---------- | --------- | ------- |
 | `Stream.runCollect` | `Effect<Array<A>, E, R>` | All elements as one array |
 | `Stream.runDrain` | `Effect<void, E, R>` | Discard all elements |
 | `Stream.runForEach` | `Effect<void, E2 \| E, R2 \| R>` | Run an effect per element |
@@ -148,7 +148,7 @@ const program = Effect.gen(function* () {
 ```
 
 | Combinator | Behavior |
-|------------|----------|
+| ------------ | ---------- |
 | `Stream.map(f)` | Transform, `f(a, i)` receives the index |
 | `Stream.mapEffect(f)` | Transform with an effect |
 | `Stream.filter(p)` | Keep elements satisfying the predicate |
@@ -163,7 +163,7 @@ const program = Effect.gen(function* () {
 | `Stream.groupAdjacentBy(keyOf)` | Group consecutive equal keys |
 | `Stream.grouped(n)` | Fixed size batches |
 | `Stream.groupedWithin(n, d)` | Batches by size or time |
-| `Stream.mapAccum(s, f)` | Stateful transform |
+| `Stream.mapAccum(() => s, f)` | Stateful transform, initial state is a thunk |
 | `Stream.scan(s, f)` | Running accumulation |
 | `Stream.chunks` | Expose internal batches |
 | `Stream.rechunk(n)` | Rebalance batch sizes |
@@ -174,9 +174,10 @@ Notes:
   drop it.
 - `groupAdjacentBy` emits `readonly [K, NonEmptyArray<A>]` for each run of
   consecutive elements sharing a key.
-- `mapAccum` receives `initial` state and a function returning
-  `readonly [state, values]`, where `values` is an array of emitted outputs. An
-  optional `{ onHalt }` decides what to emit when the stream halts.
+- `mapAccum` receives `initial` as a `LazyArg<S>`, so write `Stream.mapAccum(() => 0, f)`, not
+  `Stream.mapAccum(0, f)`. `f` returns `readonly [state, values]`, where `values` is an array of
+  emitted outputs. An optional `{ onHalt }` decides what to emit when the stream halts.
+  `Stream.scan(initial, f)` takes a plain value, not a thunk.
 - `Stream.chunks` returns a stream of `NonEmptyReadonlyArray<A>` batches. Use it
   when batch boundaries matter. Otherwise let combinators handle chunking
   transparently.
@@ -231,7 +232,7 @@ const program = Effect.gen(function* () {
 ```
 
 | Combinator | Behavior |
-|------------|----------|
+| ------------ | ---------- |
 | `Stream.merge(self, that, options?)` | Interleave both sources concurrently |
 | `Stream.mergeAll(streams, { concurrency, bufferSize? })` | Merge many streams |
 | `Stream.mergeLeft` / `Stream.mergeRight` | Merge keeping one side's values |
@@ -288,7 +289,7 @@ const unbounded = source.pipe(Stream.buffer({ capacity: "unbounded" }))
 ```
 
 | Combinator | Purpose |
-|------------|---------|
+| ------------ | --------- |
 | `Stream.buffer({ capacity, strategy? })` | Decouple producer from consumer |
 | `Stream.broadcast(options)` | Fan out to independent streams, requires `Scope` |
 | `Stream.share(options)` | Multiple consumers share one source |
@@ -314,10 +315,11 @@ const program = Effect.gen(function* () {
   // Sink.collect builds an array
   const collected = yield* Stream.run(Stream.make(1, 2, 3), Sink.collect<number>())
 
-  // Sink.fold folds with an effect, contFn decides when to stop
+  // Sink.fold folds with an effect, contFn decides when to stop.
+  // The initial state is a thunk, not a value
   const sum = yield* Stream.run(
     Stream.make(1, 2, 3),
-    Sink.fold(0, () => true, (acc, n) => Effect.succeed(acc + n)),
+    Sink.fold(() => 0, () => true, (acc, n) => Effect.succeed(acc + n)),
   )
 
   // Sink.forEach runs an effect per element
@@ -384,8 +386,8 @@ import { Stream } from "effect"
 declare const body: Stream.Stream<Uint8Array, HttpError>
 
 const lines = body.pipe(
-  Stream.decodeText(),        // Stream<Uint8Array, E> to Stream<string, E>
-  Stream.splitLines(),        // optional { encoding } on decodeText
+  Stream.decodeText(),        // Stream<Uint8Array, E> to Stream<string, E>, takes { encoding }
+  Stream.splitLines,          // not curried, pass the function itself
   Stream.runCollect,
 )
 ```
@@ -422,7 +424,7 @@ success, failure, and interruption. See [Cleanup Guarantees] in
 Useful combinators around scopes:
 
 | Combinator | Purpose |
-|------------|---------|
+| ------------ | --------- |
 | `Stream.scoped(self)` | Run a `Scope` requiring stream inside a managed scope |
 | `Stream.ensuring(finalizer)` | Run an effect after the stream finishes either way |
 | `Stream.unwrap(effect)` | Build a stream from an effect returning a stream |
@@ -486,7 +488,7 @@ const program = Effect.gen(function* () {
 ```
 
 | Combinator | Purpose |
-|------------|---------|
+| ------------ | --------- |
 | `Stream.fail(e)` | Fail the stream with a value |
 | `Stream.catchTag(tag, f)` | Handle one tagged error, f returns a stream |
 | `Stream.catchTags(cases)` | Handle several tagged errors |
@@ -555,7 +557,7 @@ Effect is not driving the loop.
 ## Quick reference table
 
 | API | Import | Purpose |
-|-----|--------|---------|
+| ----- | -------- | --------- |
 | `Stream.make(...)` | `Stream` | Fixed values |
 | `Stream.fromIterable(iter, opts?)` | `Stream` | Any Iterable with chunk size |
 | `Stream.fromEffect(effect)` | `Stream` | One value, then end |
@@ -579,7 +581,7 @@ Effect is not driving the loop.
 | `Stream.takeUntil(f)` | `Stream` | Take through the match |
 | `Stream.groupAdjacentBy(keyOf)` | `Stream` | Group consecutive equal keys |
 | `Stream.grouped(n)` | `Stream` | Fixed size batches |
-| `Stream.mapAccum(s, f)` | `Stream` | Stateful transform |
+| `Stream.mapAccum(() => s, f)` | `Stream` | Stateful transform, thunked initial state |
 | `Stream.chunks` / `rechunk(n)` | `Stream` | Work at batch level |
 | `Stream.merge(self, that, opts?)` | `Stream` | Interleave with haltStrategy |
 | `Stream.mergeAll(streams, opts)` | `Stream` | Merge many with concurrency |
@@ -594,7 +596,7 @@ Effect is not driving the loop.
 | `Stream.switchMap(f)` | `Stream` | Cancel previous child |
 | `Stream.run(self, sink)` | `Stream`, `Sink` | Consume with a sink |
 | `Sink.collect` | `Sink` | Collect all input |
-| `Sink.fold(s, cont, f)` | `Sink` | Fold with an effect |
+| `Sink.fold(() => s, cont, f)` | `Sink` | Fold with an effect, thunked initial state |
 | `Sink.forEach(f)` | `Sink` | Effect per element |
 | `Stream.repeat(schedule)` | `Stream` | Re-run the stream per schedule |
 | `Stream.forever` | `Stream` | Re-run the stream endlessly |
