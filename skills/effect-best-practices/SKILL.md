@@ -1,7 +1,7 @@
 ---
 name: effect-best-practices
-description: Enforces Effect v4 patterns for services, errors, layers, and atoms. Use when writing code with Context.Service, Schema.TaggedError, Layer composition, or @effect/atom React components.
-version: 2.0.0
+description: Enforces Effect v4 patterns for services, errors, layers, atoms, streams, SQL, and transactional state. Use when writing code with Context.Service, Schema.TaggedError, Layer composition, Stream, @effect/sql, or @effect/atom React components.
+version: 2.1.0
 ---
 
 # Effect-TS Best Practices
@@ -730,6 +730,9 @@ For detailed patterns, consult these reference files in the `references/` direct
 - `rpc-cluster-patterns.md` - RpcGroup, Workflow, Activity patterns
 - `effect-atom-patterns.md` - Atom, families, React hooks, AsyncResult handling
 - `concurrency-patterns.md` - Fork/Fiber, parallel execution, Queue, PubSub, Semaphore, Deferred, Latch, and polling patterns
+- `streams-patterns.md` - Stream sources, transformations, merging, buffers, Sinks, scoped bridges
+- `sql-patterns.md` - SQL providers, tagged template statements, SqlSchema, SqlResolver, Migrator
+- `stm-patterns.md` - Effect.tx, TxRef, TxHashMap, TxQueue, transactional patterns
 - `resource-patterns.md` - acquireRelease, scoped, resource hierarchies, pooling, ManagedRuntime
 - `http-api-patterns.md` - HttpApi, endpoints, middleware, auth, CORS, rate limiting, OpenAPI
 - `anti-patterns.md` - Complete list of forbidden patterns

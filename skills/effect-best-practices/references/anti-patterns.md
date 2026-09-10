@@ -542,7 +542,7 @@ async function fetchWithRetry() {
 import { Duration, Effect, Schedule } from "effect"
 
 const retryPolicy = Schedule.exponential(Duration.millis(100)).pipe(
-    Schedule.compose(Schedule.recurs(3)),
+    Schedule.upTo({ times: 3 }),
 )
 
 const result = yield* api.fetchData().pipe(

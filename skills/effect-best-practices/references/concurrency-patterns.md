@@ -521,12 +521,13 @@ const pollStatus = Effect.repeat(
     Schedule.spaced(Duration.seconds(5)),
 )
 
-// Exponential backoff, capped at 30s
+// Exponential backoff, capped at 30s. min and max take one array argument
 const pollWithBackoff = Effect.repeat(
     checkStatus,
-    Schedule.exponential(Duration.seconds(1)).pipe(
-        Schedule.min(Schedule.spaced(Duration.seconds(30))),
-    ),
+    Schedule.min([
+        Schedule.exponential(Duration.seconds(1)),
+        Schedule.spaced(Duration.seconds(30)),
+    ]),
 )
 
 // Poll until condition met
@@ -561,7 +562,7 @@ const repeatWhileOutput = Effect.repeat(
     checkStatus,
     Schedule.exponential(Duration.seconds(1)).pipe(
         Schedule.while((meta) => meta.output < Duration.seconds(30)),
-        Schedule.max(Schedule.recurs(10)),
+        Schedule.upTo({ times: 10 }),
     ),
 )
 ```
@@ -574,8 +575,8 @@ const repeatWhileOutput = Effect.repeat(
 | `Schedule.fixed(d)` | Run at fixed intervals (accounts for execution time) |
 | `Schedule.exponential(d)` | Double the delay each time: `d`, `2d`, `4d`, `8d`... |
 | `Schedule.recurs(n)` | Repeat at most `n` times |
-| `Schedule.min(a, b)` | Fastest-delay composition |
-| `Schedule.max(a, b)` | Slowest-delay composition |
+| `Schedule.min([a, b])` | Fastest-delay composition, one array argument |
+| `Schedule.max([a, b])` | Slowest-delay composition, one array argument |
 | `Schedule.while(f)` | Continue while predicate over `meta.input` and `meta.output` holds |
 
 ## Quick Reference Table
