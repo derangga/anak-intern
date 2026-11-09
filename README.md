@@ -32,6 +32,14 @@ To turn it off, run `/plugin` and disable it.
 - **teach** Explain a body of work plainly, at the reader's pace.
 - **technical-writing** Diataxis structure, Google developer style, Simplified
   Technical English instruction rules. For docs, RFCs, readmes, PR descriptions.
+- **orchestrate** `/orchestrate [solo|team] <issue>`. Solo does the work in the
+  main session, then reviews it. Team splits the issue across Sonnet
+  implementers (`agents/implementer.md`), then reviews. Reviews run through
+  `code-review`, at most twice, and only findings with impact get applied.
+- **code-review** Review changes since a commit, branch, or tag on two axes:
+  repo standards and the originating spec. Each axis runs in its own Sonnet
+  subagent. Covers uncommitted work too. Invoke as `/anak-intern:code-review`
+  so it doesn't collide with the built-in `/code-review`.
 
 ## How unslop is always on
 
