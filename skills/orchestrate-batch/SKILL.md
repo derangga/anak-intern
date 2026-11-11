@@ -2,7 +2,7 @@
 name: orchestrate-batch
 description: Work a queue of issues with Sonnet subagents, at most 5 at once. Issues come from any source the user names. Each issue gets one implementer and a review. Independent issues run in parallel, the rest wait.
 disable-model-invocation: true
-argument-hint: "<where the issues are and how to pick them>"
+argument-hint: "<where the issues are and how to pick them> [commit]"
 ---
 
 You are the orchestrator for a queue of issues. You own the queue, the schedule, the verdict on every review finding, and the final report. The legwork goes to:
@@ -16,12 +16,13 @@ Arguments: `$ARGUMENTS`
 
 ## Rules for the whole run
 
-- **At most 5 subagents at once.** That is up to 3 implementers plus 1 review, which runs 2 sub-agents. An implementer counts from its spawn until its report, and again while it works on fixes you sent it. When no build slot is free, wait for a completion notification.
+- **At most 5 subagents at once.** That is up to 3 implementers plus 1 review, which runs 2 sub-agents. An implementer counts from its spawn until its final report, and again while it works on fixes you sent it. A `STATUS: question` report is not final, so the slot stays taken. When no build slot is free, wait for a completion notification.
 - **At most 10 issues per run**, or the count the user named. The rest stay queued for the next run.
 - **One writer per file.** Two running issues never own the same file. A file that was dirty before the run starts belongs to the user, and no issue may own it.
 - **Retry once, unchanged.** If an implementer ends without a report, spawn it again once with the identical prompt. A second failure is final.
 - **The source stays untouched.** Do not change status, comment, or close anything in the tracker unless the user asked for it.
-- **Nothing gets committed.** The user reviews the working tree.
+- **Nothing gets committed** unless the arguments include the word `commit`. That turns on commit mode (step 5).
+- **The user is not asked anything mid-run.** You answer every implementer question yourself and log it.
 
 ## 1. Load the queue
 
@@ -43,7 +44,7 @@ The ledger is the run's state on disk, so the run survives a lost context or a n
 
 If the ledger exists, this run resumes it. Keep its base commit. Skip issues whose last status is `done`, `open`, `failed`, or `blocked`. Reset `running` and `review` to `queued`, since no agent from the old session is alive.
 
-Otherwise, write the header: the source arguments, `git rev-parse HEAD` as the base commit, and the output of `git status --short` as the files dirty before the run.
+Otherwise, write the header: the source arguments, whether commit mode is on, `git rev-parse HEAD` as the base commit, and the output of `git status --short` as the files dirty before the run.
 
 Every status change appends one line. Never rewrite a line. The last line for an id wins.
 
@@ -75,8 +76,8 @@ An issue is **ready** when all of these hold:
 
 Then loop:
 
-1. **Fill the slots.** Spawn an implementer in the background for each ready issue, highest priority first, until 3 are running. Mark each `running`. Each prompt carries the issue text and acceptance criteria, the files it owns, and the test or type-check command for those files.
-2. **On each completion notification**, read the report. If `STATUS: failed`, mark the issue `failed` and keep its files locked for the rest of the run. Do not revert its changes. If the implementer asked for changes in files it doesn't own, make them yourself, but only in files no running issue owns. Otherwise hold the request until that issue finishes.
+1. **Fill the slots.** Spawn an implementer in the background for each ready issue, highest priority first, until 3 are running. Mark each `running`. In commit mode, the note is `start <git rev-parse HEAD>`, which step 5 reviews against. Each prompt carries the issue text and acceptance criteria, the files it owns, and the test or type-check command for those files.
+2. **On each completion notification**, read the report. If `STATUS: question`, answer it with SendMessage from the issue, the code, and what the other running issues are changing. Append a ledger line with status `running` and the note `Q: <question> A: <answer>`, then wait for its next report. If `STATUS: failed`, mark the issue `failed` and keep its files locked for the rest of the run. Do not revert its changes. If the implementer asked for changes in files it doesn't own, make them yourself, but only in files no running issue owns. Otherwise hold the request until that issue finishes.
 3. **Review it** (step 5). While a review runs, the other implementers keep working.
 4. Go back to 1. Stop when nothing is running and nothing is ready.
 
@@ -84,13 +85,23 @@ Then loop:
 
 Each issue gets at most 2 reviews, the same as in `orchestrate`.
 
-Mark the issue `review`. Invoke `anak-intern:code-review` with the base commit as the fixed point, the issue's changed files as the file list, and the issue text with its acceptance criteria as the spec. Leave out the implementer's report.
+Mark the issue `review`. Invoke `anak-intern:code-review` with the fixed point, the issue's changed files as the file list, and the issue text with its acceptance criteria as the spec. Append the questions you answered for this issue to the spec under `Clarifications decided during the build`. Leave out the implementer's report.
 
-Earlier issues in this run may have changed the same files. If so, tell the Spec sub-agent which ids also touched those files, so it does not flag their changes as scope creep.
+The fixed point depends on the mode:
+
+- **Default mode**: the run's base commit. Earlier issues in this run may have changed the same files. If so, tell the Spec sub-agent which ids also touched those files, so it does not flag their changes as scope creep.
+- **Commit mode**: the `start` commit from the issue's first `running` line. Its files were exclusive since then, so the diff holds only this issue's changes.
 
 Triage as in `orchestrate`: apply a finding only when it changes behaviour, fixes a bug, meets an acceptance criterion, or removes a risk you can name. Read the code before you accept a finding. Send the accepted findings to the issue's implementer with SendMessage. That takes a build slot until it reports back. Run a second review only when the fixes changed behaviour beyond the lines the findings pointed at.
 
 Mark the issue `done`, or `open` when findings remain open after its last review. The ledger note names the open findings.
+
+**Commit mode.** Commit the issue right after marking it `done` or `open`:
+
+- Stage only its files with `git add -- <files>`: the files it owns, plus any change you made at its request in a file no issue owned. Never stage a file that was dirty before the run.
+- Write the message in the style of `git log --oneline -10`, with no issue id. For an `open` issue, list its open findings in the body.
+- Append a ledger line with the same status and the note `commit <sha>`.
+- If the commit fails, for example when a pre-commit hook rejects it, mark the issue `failed` with the hook output. Its files stay locked, as for any failed issue.
 
 ## 6. Report
 
@@ -98,8 +109,8 @@ When the loop stops, run the repo's full test suite and type checks once. That c
 
 Start with one line: how many issues are done, open, failed, and blocked, and how many remain in the source. Then:
 
-1. One line per issue: id, status, files changed, and the open findings or failure reason.
-2. Checks run and their results.
+1. One line per issue: id, status, files changed, the commit in commit mode, the open findings or failure reason, and any questions you answered for it.
+2. Checks run and their results. For each failure, name the issues whose files appear in its output. Make no new commits to fix it.
 3. The ledger path, so the next run can resume.
 
-The changes stay uncommitted for the user to review.
+In default mode, the changes stay uncommitted for the user to review.

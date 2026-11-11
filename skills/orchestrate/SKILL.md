@@ -45,7 +45,9 @@ Announce in one or two lines: the mode, why, and in team mode each piece with th
 - the files it owns, which no other implementer owns
 - how to check its piece: the test or type-check command
 
-Wait for every report. Make any cross-file changes the implementers asked for yourself. Then run the checks once across the whole change.
+When a report says `STATUS: question`, decide who answers. A question that changes a public API, stored data, or user-visible behaviour goes to the user, and the implementer waits. Answer the rest yourself from the issue, the code, and the plan for the other pieces, which only you can see. Send the answer to the implementer with SendMessage. It then continues and reports again. Keep each question, its answer, and who gave it.
+
+Wait for every final report. Make any cross-file changes the implementers asked for yourself. Then run the checks once across the whole change.
 
 Track the changed file list from your own edits and the implementer reports. The review needs it.
 
@@ -53,7 +55,7 @@ Track the changed file list from your own edits and the implementer reports. The
 
 The change gets at most 2 reviews. A third never runs. Findings still open after the last review go to the user in the report.
 
-**Review.** Invoke the `anak-intern:code-review` skill. Pass the base commit as the fixed point, the changed file list, and the issue text with its acceptance criteria as the spec. Leave out your reasoning and the implementers' reports, so the review judges the code on its own.
+**Review.** Invoke the `anak-intern:code-review` skill. Pass the base commit as the fixed point, the changed file list, and the issue text with its acceptance criteria as the spec. Append every answered implementer question to the spec under `Clarifications decided during the build`. These are spec decisions, so they belong in the spec. Leave out your reasoning and the implementers' reports, so the review judges the code on its own.
 
 **Triage.** Apply a finding only when it has impact: it changes behaviour, fixes a bug, meets an acceptance criterion, or removes a risk you can name. Reject the rest with a one-line reason, such as "no impact" for a minor judgement call. Reviewers can be wrong, so read the code before accepting a finding. If you accept nothing, the review step is done.
 
@@ -68,5 +70,6 @@ Start with the outcome in one line: done, or done with open findings. Then:
 1. Files changed, one line each.
 2. Checks run and their results.
 3. Review: reviews run out of 2, findings fixed, findings rejected with the reason, and anything still open.
+4. Questions the implementers asked, with each answer and who gave it, so the user can overrule them.
 
 The change stays uncommitted for the user to review.
