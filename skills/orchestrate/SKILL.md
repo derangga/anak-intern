@@ -30,13 +30,15 @@ Use the mode from the arguments when given. Otherwise use team only when all of 
 
 In every other case, use solo. When unsure, pick solo.
 
+A team has at most 3 pieces. If the issue splits into more, merge pieces that share files or depend on each other until 3 remain. Do not fall back to solo for this, and do not run extra pieces in waves.
+
 Announce in one or two lines: the mode, why, and in team mode each piece with the files it owns. Then continue without waiting.
 
 ## 3. Build
 
 **Solo.** Implement it yourself. Run the repo's tests and type checks for the files you touched.
 
-**Team.** Spawn one implementer per piece, all in one message so they run in parallel. Each prompt carries:
+**Team.** Spawn one implementer per piece, at most 3, all in one message so they run in parallel. Never spawn a fourth or a replacement. If an implementer fails, finish its piece yourself. Each prompt carries:
 
 - the full issue text and its acceptance criteria
 - the piece this implementer builds

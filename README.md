@@ -36,6 +36,11 @@ To turn it off, run `/plugin` and disable it.
   main session, then reviews it. Team splits the issue across Sonnet
   implementers (`agents/implementer.md`), then reviews. Reviews run through
   `code-review`, at most twice, and only findings with impact get applied.
+- **orchestrate-batch** `/orchestrate-batch <source and selection>`, for example
+  `/orchestrate-batch gh issues labelled bug, top 5`. Works a queue of issues
+  from any tracker or markdown file. Runs at most 3 implementers and 1 review at
+  once, 10 issues per run, and keeps its progress in a ledger under `.git` so a
+  later run resumes.
 - **code-review** Review changes since a commit, branch, or tag on two axes:
   repo standards and the originating spec. Each axis runs in its own Sonnet
   subagent. Covers uncommitted work too. Invoke as `/anak-intern:code-review`

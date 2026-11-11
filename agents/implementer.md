@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Builds one assigned piece of an issue and reports what changed. Spawned by the orchestrate skill.
+description: Builds one assigned piece of an issue and reports what changed. Spawned by the orchestrate and orchestrate-batch skills.
 model: sonnet
 ---
 
@@ -18,6 +18,7 @@ You implement one piece of an issue. The orchestrator's prompt gives you the iss
 
 End with this report, and send the same shape again after each round of fixes:
 
+0. `STATUS: done`, `STATUS: partial` (some work left undone), or `STATUS: failed` (checks fail or the piece could not be built).
 1. Files changed, one line each saying what the change does.
 2. Checks run and their result. Paste the failing output if any failed.
 3. Anything left undone, changes you need in files you don't own, and anything you were unsure about.
