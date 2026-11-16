@@ -45,6 +45,11 @@ To turn it off, run `/plugin` and disable it.
   repo standards and the originating spec. Each axis runs in its own Sonnet
   subagent. Covers uncommitted work too. Invoke as `/anak-intern:code-review`
   so it doesn't collide with the built-in `/code-review`.
+- **english-plain** and **bahasa-indonesia-plain** Plain, inclusive writing
+  rules for English and Bahasa Indonesia, with the RASA quality check.
+- **copywriter** (agent, `agents/copywriter.md`) Writes or rewrites copy in
+  English or Bahasa Indonesia. Both writing skills are preloaded through its
+  `skills` frontmatter.
 
 ## How unslop is always on
 
@@ -79,6 +84,10 @@ Restart OpenCode afterwards.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
+- `english-plain` and `bahasa-indonesia-plain` are from orepras's gists
+  ([English](https://gist.github.com/orepras/61f07724a6d02d3f319e3371867dad6a),
+  [Bahasa Indonesia](https://gist.github.com/orepras/3e1ca8974fc51d11825f142fa6a66635)),
+  with em dashes removed.
 - The hook approach is lifted from
   [ponytail](https://github.com/DietrichGebert/ponytail).
 
