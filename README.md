@@ -45,6 +45,9 @@ To turn it off, run `/plugin` and disable it.
   repo standards and the originating spec. Each axis runs in its own Sonnet
   subagent. Covers uncommitted work too. Invoke as `/anak-intern:code-review`
   so it doesn't collide with the built-in `/code-review`.
+- **typescript-best-practices** Type-system rules for `.ts` and `.tsx` files:
+  discriminated unions, brands, boundary parsing, no `as`. Schema examples use
+  Effect `Schema`, and the rules defer to whatever schema library the repo has.
 - **english-plain** and **bahasa-indonesia-plain** Plain, inclusive writing
   rules for English and Bahasa Indonesia, with the RASA quality check.
 - **copywriter** (agent, `agents/copywriter.md`) Writes or rewrites copy in
@@ -81,6 +84,9 @@ Restart OpenCode afterwards.
 - `unslop`, `teach`, and `technical-writing` are from
   [pstack](https://github.com/cursor/plugins/tree/main/pstack) by the Cursor
   team, MIT. unslop's scope and persistence sections are mine.
+- `typescript-best-practices` is also from pstack. I swapped its Zod examples
+  for Effect `Schema` and folded in the `principle-type-system-discipline` and
+  `principle-boundary-discipline` skills it depends on.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
