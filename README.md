@@ -48,6 +48,17 @@ To turn it off, run `/plugin` and disable it.
 - **typescript-best-practices** Type-system rules for `.ts` and `.tsx` files:
   discriminated unions, brands, boundary parsing, no `as`. Schema examples use
   Effect `Schema`, and the rules defer to whatever schema library the repo has.
+- **create-formal-verification-skill** and **maintain-formal-verification-skill**
+  Formally verify one property of the riskiest code in a repo (TLA+ by default
+  for ordering bugs such as races and retries), and leave a project-local verify
+  skill that the next agent runs on every change to that code. The maintain
+  skill brings the verification back in line after merges that skipped it. Both
+  are user-invoked.
+- **statechart** Check a TLA+ model with TLC and draw it as a Mermaid
+  statechart, with the shortest path to each state that breaks a rule. Needs
+  Node 22.18+, Bun, or Deno. On the first run it installs Java and TLC through
+  [mise](https://mise.jdx.dev); without mise, set `TLA2TOOLS` to
+  `tla2tools.jar` and `JAVA` to a Java 11+ binary.
 - **english-plain** and **bahasa-indonesia-plain** Plain, inclusive writing
   rules for English and Bahasa Indonesia, with the RASA quality check.
 - **copywriter** (agent, `agents/copywriter.md`) Writes or rewrites copy in
@@ -87,6 +98,9 @@ Restart OpenCode afterwards.
 - `typescript-best-practices` is also from pstack. I swapped its Zod examples
   for Effect `Schema` and folded in the `principle-type-system-discipline` and
   `principle-boundary-discipline` skills it depends on.
+- `create-formal-verification-skill`, `maintain-formal-verification-skill`, and
+  `statechart` are also from pstack. statechart ships without its test suite,
+  and the agent can invoke it so that generated verify skills can reach it.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
