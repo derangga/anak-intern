@@ -34,8 +34,10 @@ To turn it off, run `/plugin` and disable it.
   Technical English instruction rules. For docs, RFCs, readmes, PR descriptions.
 - **orchestrate** `/orchestrate [solo|team] <issue>`. Solo does the work in the
   main session, then reviews it. Team splits the issue across Sonnet
-  implementers (`agents/implementer.md`), then reviews. Reviews run through
-  `code-review`, at most twice, and only findings with impact get applied.
+  implementers (`agents/implementer.md`), then reviews. Each implementer gets a
+  call graph to build and reports the graph it built. The orchestrator compares
+  the two before review. Reviews run through `code-review`, at most twice, and
+  only findings with impact get applied.
 - **orchestrate-batch** `/orchestrate-batch <source and selection>`, for example
   `/orchestrate-batch gh issues labelled bug, top 5`. Works a queue of issues
   from any tracker or markdown file. Runs at most 3 implementers and 1 review at

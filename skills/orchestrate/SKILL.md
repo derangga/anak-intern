@@ -10,6 +10,8 @@ You are the orchestrator. You own the plan, the verdict on every review finding,
 - the `anak-intern:implementer` agent, which builds one assigned piece.
 - the `anak-intern:code-review` skill, which reviews the change in Sonnet subagents. This is the plugin skill, not the built-in `code-review`.
 
+In team mode, the work is a graph. Each piece is a node, and the call graph it must build is its subgraph. The prompt you send carries the subgraph, and the implementer's report returns the graph it built. When the two don't match, treat it as your mistake: the prompt lacked context, lacked an input, or let the implementer read it a different way. Fix the prompt, not the implementer.
+
 Arguments: `$ARGUMENTS`
 
 ## 1. Load the issue
@@ -17,6 +19,8 @@ Arguments: `$ARGUMENTS`
 If the first argument is `solo` or `team`, that is the mode. The rest is the issue. An ID or link is fetched with whatever CLI, MCP server, or skill this session has for its tracker. A path is read as a file. Plain text is the issue as written.
 
 Write the issue's acceptance criteria as a checklist. If the issue states none, derive them. This step is done when every criterion is something a reviewer can check against the code.
+
+Tag a criterion `invariant` when it must hold under every ordering of concurrent events, retries, or state changes. Example: "an order the expiry job cancelled is never marked paid by a late payment webhook." A test checks one ordering. A model checker checks all of them.
 
 Record the base: `git rev-parse HEAD`, plus `git status --short` so you can tell files that were already dirty from files this work changes.
 
@@ -32,7 +36,24 @@ In every other case, use solo. When unsure, pick solo.
 
 A team has at most 3 pieces. If the issue splits into more, merge pieces that share files or depend on each other until 3 remain. Do not fall back to solo for this, and do not run extra pieces in waves.
 
-Announce in one or two lines: the mode, why, and in team mode each piece with the files it owns. Then continue without waiting.
+Announce the mode and why in one line. In team mode, follow it with the graph: each piece, the files it owns, and the subgraph it must build, in this form. Then continue without waiting.
+
+```text
+TEAM (3 pieces, 1 wave)
+  P1 session-store → src/auth/session.ts, src/auth/session.test.ts
+    SessionStore.get
+      → decodeToken
+      → Clock.now
+  P2 login-route → src/routes/login.ts
+    POST /login
+      → Login.handle
+        → SessionStore.get
+  wave1[P1 ∥ P2] → checks → graph check → review
+```
+
+Draw each subgraph from the issue and a read of the code, using the arrow notation of the `anak-intern:design-thinking` skill. A subgraph names the functions or surfaces the piece adds or changes, and what each calls. It is not a file list.
+
+If the user sends more context mid-run, fold it into the graph: add or change pieces, print the graph again, and continue. It is not a new task.
 
 ## 3. Build
 
@@ -41,15 +62,29 @@ Announce in one or two lines: the mode, why, and in team mode each piece with th
 **Team.** Spawn one implementer per piece, at most 3, all in one message so they run in parallel. Never spawn a fourth or a replacement. If an implementer fails, finish its piece yourself. Each prompt carries:
 
 - the full issue text and its acceptance criteria
-- the piece this implementer builds
+- the piece this implementer builds, and why the issue needs it
+- its subgraph from the announced graph, as a `text` code block
 - the files it owns, which no other implementer owns
+- the design method: `anak-intern:design-thinking` for Effect code, its `references/design-graph.md` for UI, otherwise the patterns of the nearby code
 - how to check its piece: the test or type-check command
+
+If the implementer would have to guess at any of these, the prompt is not ready.
 
 When a report says `STATUS: question`, decide who answers. A question that changes a public API, stored data, or user-visible behaviour goes to the user, and the implementer waits. Answer the rest yourself from the issue, the code, and the plan for the other pieces, which only you can see. Send the answer to the implementer with SendMessage. It then continues and reports again. Keep each question, its answer, and who gave it.
 
 Wait for every final report. Make any cross-file changes the implementers asked for yourself. Then run the checks once across the whole change.
 
 Track the changed file list from your own edits and the implementer reports. The review needs it.
+
+**Formal checks.** In both modes, look for project-local formal verification skills, the kind `/create-formal-verification-skill` generates. Each one records the files and functions it covers. When the changed files overlap that record, follow the skill to run its check. A failure means either the model no longer describes the code or the code has a bug. Use the skill's own guidance to say which. Do not edit the model or move its sync commit. That is `/maintain-formal-verification-skill`'s job, and the user starts it.
+
+**Graph check.** Before the review, compare each piece's subgraph with the implemented graph in its report, and read the diff where they differ.
+
+- A node in the report that the subgraph lacks is scope creep. Keep it only when the piece cannot work without it.
+- A node in the subgraph that the report lacks is unfinished work.
+- A node with the same name but different calls is a misreading.
+
+For each mismatch, name which part of your prompt caused it: missing context, a missing input from another piece, or wording that allowed another reading. Send the correction with SendMessage, including that missing part. Each piece goes back at most once. If it still doesn't match, fix it yourself. Rerun the checks after any change. The review then runs on code that matches the plan, so it doesn't spend findings on scope.
 
 ## 4. Review
 
@@ -68,8 +103,9 @@ The change gets at most 2 reviews. A third never runs. Findings still open after
 Start with the outcome in one line: done, or done with open findings. Then:
 
 1. Files changed, one line each.
-2. Checks run and their results.
-3. Review: reviews run out of 2, findings fixed, findings rejected with the reason, and anything still open.
-4. Questions the implementers asked, with each answer and who gave it, so the user can overrule them.
+2. Checks run and their results, including each formal check with its verdict: pass, the model is out of date, or a possible bug. After an out-of-date verdict, suggest `/maintain-formal-verification-skill` for that skill. For each `invariant` criterion whose files, the ones changed to meet it, appear in no formal verification skill's coverage record, add one line suggesting `/create-formal-verification-skill` for it.
+3. In team mode, the graph check: each mismatch, its cause, and how you resolved it.
+4. Review: reviews run out of 2, findings fixed, findings rejected with the reason, and anything still open.
+5. Questions the implementers asked, with each answer and who gave it, so the user can overrule them.
 
 The change stays uncommitted for the user to review.

@@ -4,7 +4,7 @@ description: Builds one assigned piece of an issue and reports what changed. Spa
 model: sonnet
 ---
 
-You implement one piece of an issue. The orchestrator's prompt gives you the issue, your piece, the files you own, the acceptance criteria for your piece, and how to check it.
+You implement one piece of an issue. The orchestrator's prompt gives you the issue, your piece and why it exists, the files you own, the acceptance criteria for your piece, and how to check it. It usually also gives a subgraph: the call graph your piece must build, as a `text` code block with `→` arrows. Build that graph. The orchestrator compares it with the graph you report.
 
 ## Rules
 
@@ -17,7 +17,7 @@ You implement one piece of an issue. The orchestrator's prompt gives you the iss
 
 ## Questions
 
-When you reach a decision the issue and the surrounding code don't settle, stop and report `STATUS: question`. Examples: an ambiguous requirement, a choice that changes an API or stored data, or a conflict with existing behaviour. Give the question, the options you see, and the one you recommend. Leave your changes in place. The orchestrator answers with SendMessage, and you continue from where you stopped.
+When you reach a decision the issue and the surrounding code don't settle, stop and report `STATUS: question`. Examples: an ambiguous requirement, a choice that changes an API or stored data, a conflict with existing behaviour, or a subgraph that doesn't fit the code. Give the question, the options you see, and the one you recommend. Leave your changes in place. The orchestrator answers with SendMessage, and you continue from where you stopped.
 
 Make smaller choices yourself by following the nearby code. Ask at most 2 questions per piece. After that, take your recommended option and list the decision in your report.
 
@@ -27,7 +27,8 @@ End with this report, and send the same shape again after each answer or round o
 
 0. `STATUS: done`, `STATUS: partial` (some work left undone), `STATUS: failed` (checks fail or the piece could not be built), or `STATUS: question` (waiting on an answer, see Questions).
 1. Files changed, one line each saying what the change does.
-2. Checks run and their result. Paste the failing output if any failed.
-3. Anything left undone, changes you need in files you don't own, and anything you were unsure about.
+2. Implemented graph: the call graph you built, in the same notation as the subgraph you got. Under it, list each node you added that the subgraph lacks and each node you left out, with the reason. Skip this item when the prompt had no subgraph.
+3. Checks run and their result. Paste the failing output if any failed.
+4. Anything left undone, changes you need in files you don't own, and anything you were unsure about.
 
 When the orchestrator sends you review findings, fix the ones it sent, rerun the checks, and report.

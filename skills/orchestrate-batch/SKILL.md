@@ -22,7 +22,8 @@ Arguments: `$ARGUMENTS`
 - **Retry once, unchanged.** If an implementer ends without a report, spawn it again once with the identical prompt. A second failure is final.
 - **The source stays untouched.** Do not change status, comment, or close anything in the tracker unless the user asked for it.
 - **Nothing gets committed** unless the arguments include the word `commit`. That turns on commit mode (step 5).
-- **The user is not asked anything mid-run.** You answer every implementer question yourself and log it.
+- **The user is not asked anything mid-run.** You answer every implementer question yourself and log it. Context the user sends mid-run goes to the issues it affects: into the prompt of a queued issue, or by SendMessage to a running one. It does not start a new run.
+- **A mismatch is your mistake.** When an implemented graph doesn't match the subgraph you sent, your prompt lacked context, lacked an input, or allowed another reading. Fix the prompt.
 
 ## 1. Load the queue
 
@@ -31,10 +32,11 @@ The arguments say where the issues are and how to pick them. Examples: `bd ready
 For each issue, record:
 
 - **id and title.** Use the source's own id. For a markdown file without ids, use the heading slug.
-- **text and acceptance criteria.** If the issue states none, derive them. Every criterion must be something a reviewer can check against the code.
+- **text and acceptance criteria.** If the issue states none, derive them. Every criterion must be something a reviewer can check against the code. Tag a criterion `invariant` when it must hold under every ordering of concurrent events, retries, or state changes, as in `orchestrate`.
 - **priority.** Use the source's field when it has one. Otherwise use the order the source lists them in.
 - **dependencies.** Use the source's field when it has one. Otherwise take the ones the text states ("blocked by #12", "after the auth task"). If neither exists, the issue has none.
 - **owned files.** Predict the files the issue will change from its text and a search of the code. When unsure, own more files, not fewer. A wider guess only costs parallelism.
+- **subgraph.** The call graph the issue must build, as a `text` code block in the arrow notation of the `anak-intern:design-thinking` skill. It names the functions or surfaces the issue adds or changes, and what each calls. Draw it when the issue's slot opens, not for the whole queue up front.
 
 Sort by priority, highest first, ties in source order. Keep the first 10, or the count the user named.
 
@@ -58,7 +60,7 @@ Statuses: `queued`, `running`, `review`, `done`, `open` (done with findings left
 
 Print the queue as one block, then continue without waiting:
 
-```ts
+```text
 QUEUE (10 of 37, by priority)
   #41 → src/auth/login.ts, src/auth/login.test.ts      ready
   #38 → src/billing/invoice.ts                          ready
@@ -76,8 +78,8 @@ An issue is **ready** when all of these hold:
 
 Then loop:
 
-1. **Fill the slots.** Spawn an implementer in the background for each ready issue, highest priority first, until 3 are running. Mark each `running`. In commit mode, the note is `start <git rev-parse HEAD>`, which step 5 reviews against. Each prompt carries the issue text and acceptance criteria, the files it owns, and the test or type-check command for those files.
-2. **On each completion notification**, read the report. If `STATUS: question`, answer it with SendMessage from the issue, the code, and what the other running issues are changing. Append a ledger line with status `running` and the note `Q: <question> A: <answer>`, then wait for its next report. If `STATUS: failed`, mark the issue `failed` and keep its files locked for the rest of the run. Do not revert its changes. If the implementer asked for changes in files it doesn't own, make them yourself, but only in files no running issue owns. Otherwise hold the request until that issue finishes.
+1. **Fill the slots.** Spawn an implementer in the background for each ready issue, highest priority first, until 3 are running. Mark each `running`. In commit mode, the note is `start <git rev-parse HEAD>`, which step 5 reviews against. Each prompt carries the issue text and acceptance criteria, why the issue matters if the source says, its subgraph, the files it owns, the design method (`anak-intern:design-thinking` for Effect code, its `references/design-graph.md` for UI, otherwise the patterns of the nearby code), and the test or type-check command for those files.
+2. **On each completion notification**, read the report. On `STATUS: done` or `partial`, run the graph check before the review: compare the subgraph you sent with the implemented graph in the report, and read the diff where they differ. An extra node is scope creep, a missing node is unfinished work, and a node with different calls is a misreading. Send one correction with SendMessage that supplies what your prompt lacked, and log it as `running` with the note `graph: <mismatch>`. A second mismatch goes to the review as a known gap, named in the spec. If `STATUS: question`, answer it with SendMessage from the issue, the code, and what the other running issues are changing. Append a ledger line with status `running` and the note `Q: <question> A: <answer>`, then wait for its next report. If `STATUS: failed`, mark the issue `failed` and keep its files locked for the rest of the run. Do not revert its changes. If the implementer asked for changes in files it doesn't own, make them yourself, but only in files no running issue owns. Otherwise hold the request until that issue finishes.
 3. **Review it** (step 5). While a review runs, the other implementers keep working.
 4. Go back to 1. Stop when nothing is running and nothing is ready.
 
@@ -105,12 +107,13 @@ Mark the issue `done`, or `open` when findings remain open after its last review
 
 ## 6. Report
 
-When the loop stops, run the repo's full test suite and type checks once. That catches issues that broke each other.
+When the loop stops, run the repo's full test suite and type checks once. That catches issues that broke each other. Then run the formal checks whose coverage overlaps any changed file, as in `orchestrate`'s step 3. Do not edit a model or move its sync commit.
 
 Start with one line: how many issues are done, open, failed, and blocked, and how many remain in the source. Then:
 
 1. One line per issue: id, status, files changed, the commit in commit mode, the open findings or failure reason, and any questions you answered for it.
-2. Checks run and their results. For each failure, name the issues whose files appear in its output. Make no new commits to fix it.
-3. The ledger path, so the next run can resume.
+2. Checks run and their results. For each failure, name the issues whose files appear in its output. Make no new commits to fix it. Give each formal check a verdict: pass, the model is out of date, or a possible bug. Name the issues whose files it covers. After an out-of-date verdict, suggest `/maintain-formal-verification-skill` for that skill.
+3. Each `invariant` criterion whose files, the ones changed to meet it, appear in no formal verification skill's coverage record, with its issue id and a suggestion to run `/create-formal-verification-skill` for it.
+4. The ledger path, so the next run can resume.
 
 In default mode, the changes stay uncommitted for the user to review.
