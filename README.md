@@ -77,21 +77,6 @@ it as context. That is the whole implementation, there is no code.
 Because the hook reads the skill file directly, the always-on ruleset and the
 on-demand skill cannot drift apart.
 
-## OpenCode
-
-`.opencode/plugins/unslop.mjs` does the same job for OpenCode. It appends the
-ruleset to the system prompt every turn and registers `skills/` so the rest are
-available there too. It reads the same `SKILL.md`, so nothing drifts.
-
-OpenCode auto-loads anything in its global plugin directory, so there is no
-config entry to add:
-
-```sh
-ln -s "$PWD/.opencode/plugins/unslop.mjs" ~/.config/opencode/plugins/unslop.mjs
-```
-
-Restart OpenCode afterwards.
-
 ## Credits
 
 - `unslop`, `teach`, and `technical-writing` are from
@@ -106,6 +91,8 @@ Restart OpenCode afterwards.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
+- The graph protocol in `orchestrate` and `orchestrate-batch` is adapted from
+  [meta7 by r17x](https://gist.github.com/r17x/fb5d68381fa4cc4630b42740f72a1225).
 - `english-plain` and `bahasa-indonesia-plain` are from orepras's gists
   ([English](https://gist.github.com/orepras/61f07724a6d02d3f319e3371867dad6a),
   [Bahasa Indonesia](https://gist.github.com/orepras/3e1ca8974fc51d11825f142fa6a66635)),
