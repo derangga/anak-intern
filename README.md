@@ -61,8 +61,17 @@ To turn it off, run `/plugin` and disable it.
   Node 22.18+, Bun, or Deno. On the first run it installs Java and TLC through
   [mise](https://mise.jdx.dev); without mise, set `TLA2TOOLS` to
   `tla2tools.jar` and `JAVA` to a Java 11+ binary.
+- **no-comments** `/no-comments [files or diff]`. Spawns the comment-sicko
+  agent to delete comments in the diff since the default branch, then fixes
+  the code it flags as needing the comment. Constraint comments such as
+  `do not remove` get an offer to enforce them with a type, test, or lint rule.
+  `/no-comments audit [path]` changes nothing and ranks folders by the
+  comments that make an agent afraid to edit, so you can clean the worst first.
 - **english-plain** and **bahasa-indonesia-plain** Plain, inclusive writing
   rules for English and Bahasa Indonesia, with the RASA quality check.
+- **comment-sicko** (agent, `agents/comment-sicko.md`) Deletes comments in a
+  scoped diff and flags the code that needed them. Edits comments only.
+  Spawned by `no-comments`.
 - **copywriter** (agent, `agents/copywriter.md`) Writes or rewrites copy in
   English or Bahasa Indonesia. Both writing skills are preloaded through its
   `skills` frontmatter.
@@ -88,6 +97,10 @@ on-demand skill cannot drift apart.
 - `create-formal-verification-skill`, `maintain-formal-verification-skill`, and
   `statechart` are also from pstack. statechart ships without its test suite,
   and the agent can invoke it so that generated verify skills can reach it.
+- `no-comments` and the `comment-sicko` agent are also from pstack. I removed
+  their dependence on `poteto-mode`, `architect`, `why`, and the principle
+  skills by writing the parts they used into the skill and agent, and added a
+  baseline so a rejected report is undone without touching uncommitted work.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
