@@ -4,15 +4,15 @@ How to open a lesson so the learner can select any passage and ask about it, and
 
 ## Opening a lesson
 
-Before opening the first lesson of the session, run `command -v plannotator`.
+In every case, open the workspace root (the directory `./lessons/` resolves from), never the lesson file. A single-file session only serves the lesson's own folder, so `../assets/` returns 404 and the lesson loses its styles and quiz scripts. Tell the learner which lesson file to open from the Files tab, and that they press Esc before using a quiz, because clicks select elements for comments until they do.
 
-**Plannotator is installed.** Open the lesson by running this from the workspace root, the directory `./lessons/` resolves from:
+**Your harness gives you a Plannotator tool** (a tool whose name contains `plannotator`; some harnesses list it only after a tool search). Use it, not the CLI, because a harness with a Plannotator plugin may block `plannotator` shell calls. Ask it to annotate the workspace root by absolute path. Follow the tool's own description for how the learner's comments come back. If it returns before they submit, end your turn and wait for them.
+
+**No tool, but `command -v plannotator` finds the CLI.** Run this from the workspace root:
 
 ```
 plannotator annotate .
 ```
-
-Pass the workspace root, never the lesson file. A single-file session only serves the lesson's own folder, so `../assets/` returns 404 and the lesson loses its styles and quiz scripts. Tell the learner which lesson file to open from the Files tab, and that they press Esc before using a quiz, because clicks select elements for comments until they do.
 
 The command waits until the learner submits, then prints their comments. If your harness stops long-running shell commands, send the lesson through the Plannotator Inbox instead, since it does not hold your turn open. `plannotator inbox --help` explains how.
 
