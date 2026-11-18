@@ -31,10 +31,9 @@ To turn it off, run `/plugin` and disable it.
   [Effect](https://effect.website) TypeScript library.
 - **teach** `/teach <topic>`. Teaches a topic over several sessions as short
   HTML lessons, with a mission, references and learning records kept in the
-  workspace. When [Plannotator](https://plannotator.ai) is installed, each
-  lesson opens in it so you can select any passage and ask about it. The agent
-  answers your comments and saves the gaps they show as learning records.
-  Without Plannotator, lessons open in the browser as usual.
+  workspace. In each lesson you can select any passage and attach a question,
+  then copy all your questions and paste them into the chat. The agent answers
+  them and saves the gaps they show as learning records.
 - **technical-writing** Diataxis structure, Google developer style, Simplified
   Technical English instruction rules. For docs, RFCs, readmes, PR descriptions.
 - **orchestrate** `/orchestrate [solo|team] <issue>`. Solo does the work in the
@@ -94,7 +93,8 @@ on-demand skill cannot drift apart.
 ## Credits
 
 - `teach` is from [mattpocock/skills](https://github.com/mattpocock/skills),
-  MIT. `ANNOTATE.md` and the two lines in `SKILL.md` that point to it are mine.
+  MIT. `ANNOTATE.md`, `assets/annotate.js` and the two lines in `SKILL.md` that
+  point to `ANNOTATE.md` are mine.
 - `unslop` and `technical-writing` are from
   [pstack](https://github.com/cursor/plugins/tree/main/pstack) by the Cursor
   team, MIT. unslop's scope and persistence sections are mine.

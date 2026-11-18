@@ -52,7 +52,7 @@ A lesson should be **beautiful**, with clean, readable typography and layout, si
 
 The lesson should be short, and completable very quickly. Learners' working memory is very small, and we need to stay within it. But each lesson should give the user a single tangible win that they can build on. It should be directly tied to the mission, and should be in the user's zone of proximal development.
 
-Open the lesson for the user as described in [ANNOTATE.md](./ANNOTATE.md), so they can annotate it and ask questions in place.
+Build the lesson with the annotation component and open it for the user, both as described in [ANNOTATE.md](./ANNOTATE.md), so they can ask questions about any passage.
 
 Each lesson should link via HTML anchors to other lessons and reference documents.
 
