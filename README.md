@@ -29,7 +29,12 @@ To turn it off, run `/plugin` and disable it.
   [presenterm](https://github.com/mfontanini/presenterm) and configuring it.
 - **effect-best-practices** Best practices, patterns, and anti-patterns for the
   [Effect](https://effect.website) TypeScript library.
-- **teach** Explain a body of work plainly, at the reader's pace.
+- **teach** `/teach <topic>`. Teaches a topic over several sessions as short
+  HTML lessons, with a mission, references and learning records kept in the
+  workspace. When [Plannotator](https://plannotator.ai) is installed, each
+  lesson opens in it so you can select any passage and ask about it. The agent
+  answers your comments and saves the gaps they show as learning records.
+  Without Plannotator, lessons open in the browser as usual.
 - **technical-writing** Diataxis structure, Google developer style, Simplified
   Technical English instruction rules. For docs, RFCs, readmes, PR descriptions.
 - **orchestrate** `/orchestrate [solo|team] <issue>`. Solo does the work in the
@@ -88,7 +93,9 @@ on-demand skill cannot drift apart.
 
 ## Credits
 
-- `unslop`, `teach`, and `technical-writing` are from
+- `teach` is from [mattpocock/skills](https://github.com/mattpocock/skills),
+  MIT. `ANNOTATE.md` and the two lines in `SKILL.md` that point to it are mine.
+- `unslop` and `technical-writing` are from
   [pstack](https://github.com/cursor/plugins/tree/main/pstack) by the Cursor
   team, MIT. unslop's scope and persistence sections are mine.
 - `typescript-best-practices` is also from pstack. I swapped its Zod examples
