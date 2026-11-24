@@ -1,26 +1,39 @@
 ---
 name: no-comments
-description: "Delete comments in a diff or path with the comment-sicko agent, fix the code it flags, and offer to enforce claimed constraints in code. `audit` ranks folders to clean first."
+description: "Delete comments in a diff or path with the comment-sicko agent, fix the code it flags, move decision records into ADRs, and file issues for what stays open. `audit` ranks folders to clean first. `cap` adds a CI check so comment lines per file can only go down."
 disable-model-invocation: true
+argument-hint: "[audit|cap] [files, folder, or diff]"
 ---
 
 # No comments
 
-Spawn the comment-sicko agent on the scope, check its work, then fix the code it flags. Comment Sicko starts fresh, without this session's context, so trust its reading of the code over your own memory of why a comment was written.
+Spawn the comment-sicko agent on the scope, check its work, then act on the label it gives each comment: fix or file the code behind an Excuse, and move a Decision Record into an ADR. Comment Sicko starts fresh, without this session's context, so trust its reading of the code over your own memory of why a comment was written.
 
-If the first argument is `audit`, follow Audit and stop. Otherwise follow Scope and Steps.
+Arguments: `$ARGUMENTS`
+
+If the first argument is `audit`, follow Audit and stop. If it is `cap`, follow Cap and stop. Otherwise follow Scope and Steps.
 
 ## Audit
 
 `/no-comments audit [path]` reads only. It finds the folders whose comments most likely make an agent hesitate to edit, so the user can clean them one folder at a time. The path defaults to the repo root. Change no files and spawn no agent.
 
-1. **Count comment lines per file** with `git grep -c --untracked -E '^\s*(//|#|/\*|\*|-- |<!--)' -- <path> ':!*.md' ':!*.json' ':!*.lock' ':!*.yaml' ':!*.yml'`.
-2. **Find warning comments**, the ones that tell an agent to keep away. Use `git grep -n -i -E --untracked` with the same pathspec and this pattern: `(//|#|/\*|\*|-- ).*(do not (touch|change|remove|edit)|don'?t (touch|change|remove|edit)|careful|fragile|hack|workaround|important|warning|too risky|for now|temporary|xxx|fixme)`.
-3. **Read the top hits.** Open the 10 files with the most warning comments. In each, note warning comments, comment blocks of 4 or more lines above a function, and commented-out code. Judge each against the Keeps in `agents/comment-sicko.md`. A comment that a Keep protects does not count.
+1. **Count comment lines per file** with `sh <this skill's base directory>/assets/comment-cap.sh count <path>`. It prints `<lines> <file>` per file, relative to the path.
+2. **Find warning comments**, the ones that tell an agent to keep away. Use `git grep -n -i -E --untracked -- <path> ':!*.md' ':!*.json' ':!*.lock' ':!*.yaml' ':!*.yml'` with this pattern: `(//|#|/\*|\*|-- ).*(do not (touch|change|remove|edit)|don'?t (touch|change|remove|edit)|careful|fragile|hack|workaround|important|warning|too risky|for now|temporary|xxx|fixme)`.
+3. **Read the top hits.** Open the 10 files with the most warning comments. In each, note warning comments, comment blocks of 4 or more lines above a function, and commented-out code. Judge each against the Labels in `agents/comment-sicko.md`. A comment that a Keep protects does not count.
 4. **Rank folders** by the warning comments and long blocks that no Keep protects, then by total comment lines. Group by the folder one or two levels below the path, whichever gives 5 to 15 groups.
-5. **Report** a table: folder, warning comments, long blocks, commented-out code, total comment lines. Under it, quote the 3 worst comments in the top 5 folders as `file:line`, and end with the commands to run next, such as `/no-comments src/payment/`, one per folder in ranked order.
+5. **Report** a table: folder, warning comments, long blocks, commented-out code, total comment lines. Under it, quote the 3 worst comments in the top 5 folders as `file:line`. Then estimate the lines a full cleanup sheds: the total comment lines is the upper bound, and the share of Keeps and Decision Records you saw in step 3 is the likely discount. End with the commands to run next, such as `/no-comments src/payment/`, one per folder in ranked order, then `/no-comments cap <path>`.
 
 The counts come from patterns, so they are estimates. Say so in the report.
+
+## Cap
+
+`/no-comments cap [path]` adds a check that fails when a file under the path gains comment lines. Each file's cap starts at its comment-line count today, so files waiting for cleanup still pass, and caps only go down. The path defaults to the repo root.
+
+1. **Copy the script.** Copy `<this skill's base directory>/assets/comment-cap.sh` to `scripts/comment-cap.sh` in the repo, unless it is already there.
+2. **Check the pattern.** Run `sh scripts/comment-cap.sh count <path>` and open the 3 files with the highest counts. If the pattern counts lines that are not comments in this repo's languages, such as C's `#include`, narrow the pattern in the copy.
+3. **Write the caps.** Run `sh scripts/comment-cap.sh update <path>`. It writes `<path>/.comment-cap`. Run `check` on the same path and confirm it exits 0.
+4. **Run it where lint runs.** Add `sh scripts/comment-cap.sh check <path>` next to the existing lint step: a CI workflow, a pre-commit hook, or a `package.json` script. If the repo has none, ask the user with AskUserQuestion where it should run.
+5. **Report** the files capped, their total comment lines, and where the check runs. Tell the user how caps change: `update` lowers them after a cleanup, and a cap rises only through a hand edit to `.comment-cap`, which shows in review. A renamed file loses its cap, so move its line in `.comment-cap` by hand.
 
 ## Scope
 
@@ -45,6 +58,8 @@ With a diff scope, only comments on lines the diff adds or changes are in scope.
    - a deleted comment that a Keep protects
    - a `MUST KILL` flag with a wrong reason, or one that blames code the user wrote on purpose and wants to keep
    - a missed lint or type suppression in scope. A suppression that protects correctness or safety is a `MUST KILL`.
+   - a Stale label without a grep result that proves it, except on commented-out code
+   - a Decision Record that fails one of its three tests, or that describes behavior forced on us from outside, which is a Keep
 
    A flag on a surprise in our own code is valid. Do not restore that comment. A kept comment survives only with proof that it is about something we cannot change.
 
@@ -58,14 +73,29 @@ With a diff scope, only comments on lines the diff adds or changes are in scope.
 
 6. **Implement the smallest root-cause fix in scope.** Fix the first place the code made the wrong decision, not the place the comment sat. Remove every workaround the flags name. Add no guards, retries, or swallowed errors to hide the symptom. If the root cause is outside the scope, land the smallest fix inside it and report the rest as open. Never widen the scope to fix other instances.
 
-7. **Offer to enforce constraints.** Constraint comments say `do not remove`, `do not change wording`, or `talk to X before changing`. Leave those that are about something we cannot change. For each of the rest, offer the cheapest in-scope check that would enforce it: a type, a runtime assert, a test, or a lint rule in CI. Ask with AskUserQuestion and wait for the answer. If approved, add the check, then delete the comment. If declined, or when running unattended, delete the comment, report the constraint as open, and sketch the work it needs.
+7. **Move Decision Records into ADRs.** Use the repo's ADR folder if it has one, such as `docs/adr/` or `docs/decisions/`. Otherwise create `docs/adr/` with the first ADR. Name each file `NNNN-slug.md`, one higher than the highest number there. Comments that record one decision become one ADR, and a decision an existing ADR already covers becomes none. Write this, and add nothing else unless the comment held it:
 
-8. **Report:**
-   - comments deleted, and comments restored
+   ```md
+   # <the decision, as a short title>
+
+   <1 to 3 sentences: the context, what we decided, and why. Name the module or symbol it governs, not a line number.>
+   ```
+
+8. **Offer to enforce constraints.** Constraint comments say `do not remove`, `do not change wording`, or `talk to X before changing`. Leave those that are about something we cannot change. For each of the rest, offer the cheapest in-scope check that would enforce it: a type, a runtime assert, a test, or a lint rule in CI. Ask with AskUserQuestion and wait for the answer. If approved, add the check, then delete the comment. If declined, or when running unattended, delete the comment, report the constraint as open, and sketch the work it needs.
+
+9. **File issues for open work.** Collect each `MUST KILL` flag that steps 4 to 6 left unfixed and each constraint left unenforced. Each issue names the symbol, quotes the deleted comment, and gives the fix from the flag or the sketch. Use `bd create` when the repo has `.beads/`, otherwise `gh issue create` when the remote is on GitHub. Print the issues as a numbered list, then ask with AskUserQuestion whether to file all, none, or the numbers the user names. File only those. With no tracker, or when running unattended, put them in the report.
+
+10. **Lower the caps.** For each `.comment-cap` in or above the scope, run `sh scripts/comment-cap.sh update <its folder>` so the caps drop to the new counts.
+
+11. **Report:**
+   - comments deleted per label, and comments restored
+   - lines shed, from `git diff --shortstat <baseline>` plus the untracked files
+   - ADRs written
    - reruns of Comment Sicko, and any report left rejected
    - the sketch from step 5, if any
    - fixes made
    - enforcement offered, and enforcement added
-   - constraints left unenforced, and other open work
+   - issues filed, and open work left in the report
+   - `/no-comments cap <scope>` as the next step, if the scope has no `.comment-cap`
 
 Leave all changes uncommitted.

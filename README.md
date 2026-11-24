@@ -61,11 +61,15 @@ To turn it off, run `/plugin` and disable it.
   skill brings the verification back in line after merges that skipped it. Both
   are user-invoked.
 - **no-comments** `/no-comments [files or diff]`. Spawns the comment-sicko
-  agent to delete comments in the diff since the default branch, then fixes
-  the code it flags as needing the comment. Constraint comments such as
-  `do not remove` get an offer to enforce them with a type, test, or lint rule.
-  `/no-comments audit [path]` changes nothing and ranks folders by the
-  comments that make an agent afraid to edit, so you can clean the worst first.
+  agent to label each comment in the diff since the default branch as a Keep,
+  Tautology, Stale, Excuse, or Decision Record. It deletes all but the Keeps,
+  fixes the code behind each Excuse or files an issue for it, and moves each
+  Decision Record into an ADR. Constraint comments such as `do not remove` get
+  an offer to enforce them with a type, test, or lint rule.
+  `/no-comments audit [path]` changes nothing, ranks folders by the comments
+  that make an agent afraid to edit, and estimates the lines a cleanup sheds.
+  `/no-comments cap [path]` adds a CI check that fails when a file gains
+  comment lines, with per-file caps that only go down.
 - **english-plain** and **bahasa-indonesia-plain** Plain, inclusive writing
   rules for English and Bahasa Indonesia, with the RASA quality check.
 - **comment-sicko** (agent, `agents/comment-sicko.md`) Deletes comments in a
@@ -103,6 +107,8 @@ on-demand skill cannot drift apart.
   their dependence on `poteto-mode`, `architect`, `why`, and the principle
   skills by writing the parts they used into the skill and agent, and added a
   baseline so a rejected report is undone without touching uncommitted work.
+  The comment labels, ADRs, issues, and the `cap` check come from a prompt
+  shared on X.
 - `bro` is from [dmmulroy/skills](https://github.com/dmmulroy/skills).
 - `design-thinking` is from
   [this gist by r17x](https://gist.github.com/r17x/90eb2f7be93932b5693753aedb09c01a).
